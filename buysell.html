@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noble Chain - Buy/Sell</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>body{font-family:'Inter',sans-serif}.asset-card{transition:all .15s}.asset-card:hover{transform:translateY(-4px)}</style>
+</head>
+<body class="bg-white text-black min-h-screen">
+    <header class="bg-white border-b p-4 sticky top-0 z-40">
+        <div class="max-w-3xl mx-auto flex items-center justify-between">
+            <div>
+                <div id="profileName" class="font-semibold">Profile</div>
+                <div id="pageSubtitle" class="text-xs text-gray-500">Buy or sell crypto instantly</div>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button onclick="goBack()" class="text-sm text-gray-600">Back</button>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto p-4">
+        <div class="bg-white p-4 rounded-2xl mb-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <button id="toggleBuy" class="px-3 py-2 bg-black text-white rounded-xl">Buy</button>
+                <button id="toggleSell" class="px-3 py-2 bg-gray-100 text-gray-700 rounded-xl">Sell</button>
+            </div>
+            <div class="w-1/2">
+                <input id="assetSearch" placeholder="Search assets" class="w-full p-2 border border-gray-200 rounded-lg" />
+            </div>
+        </div>
+
+        <div id="assetsList" class="space-y-3">
+            <!-- assets will render here -->
+        </div>
+    </main>
+
+    <script src="main.js"></script>
+    <script>
+        // Read URL params
+        const params = new URLSearchParams(location.search || location.hash.replace('#',''));
+        let mode = params.get('mode') || 'buy';
+        const selectedAsset = params.get('asset') || null;
+
+        function goBack(){ window.location.href='dashboard.html'; }
+
+        function setMode(m){ mode = m; document.getElementById('toggleBuy').className = m==='buy' ? 'px-3 py-2 bg-black text-white rounded-xl' : 'px-3 py-2 bg-gray-100 text-gray-700 rounded-xl'; document.getElementById('toggleSell').className = m==='sell' ? 'px-3 py-2 bg-black text-white rounded-xl' : 'px-3 py-2 bg-gray-100 text-gray-700 rounded-xl'; document.getElementById('pageSubtitle').textContent = m==='buy' ? 'Buy crypto instantly' : 'Sell crypto instantly'; renderAssets(); }
+
+        function formatCurrency(v){ return window.nobleChain ? window.nobleChain.formatCurrency(v,2) : '$' + Number(v).toFixed(2); }
+
+        function renderAssets(){
+            const container = document.getElementById('assetsList');
+            const q = document.getElementById('assetSearch').value.trim().toLowerCase();
+            const md = window.nobleChain.marketData || {};
+            const wallet = window.nobleChain.getWallet() || { dollarBalance:0, assets:{} };
+            const items = Object.keys(md).filter(k => !q || (md[k].name && md[k].name.toLowerCase().includes(q)) || (md[k].symbol && md[k].symbol.toLowerCase().includes(q))).map(k => md[k]);
+            container.innerHTML = items.map(a => {
+                const bal = (wallet.assets && wallet.assets[a.symbol] && wallet.assets[a.symbol].balance) || 0;
+                const value = bal * (a.price || 0);
+                const logo = a.logoSvg || (a.logo ? `<img src="${a.logo}" class="w-8 h-8"/>` : `<div class="w-8 h-8 rounded-full bg-[${a.color||'#000'}] text-white flex items-center justify-center text-xs">${a.symbol.substring(0,2)}</div>`);
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-2xl asset-card cursor-pointer" onclick="openAsset('${a.symbol}')">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-full overflow-hidden" style="background:${a.color||'#000'};display:flex;align-items:center;justify-content:center">${a.logoSvg}</div>
+                            <div>
+                                <div class="font-semibold text-sm">${a.name}</div>
+                                <div class="text-xs text-gray-500">${a.symbol}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-semibold text-sm">${formatCurrency(a.price)}</div>
+                            <div class="text-xs text-gray-500">${bal} • ${formatCurrency(value)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function openAsset(symbol){
+            // navigate to the same page with selected asset preserved for deep link
+            location.href = `buysell.html?mode=${mode}&asset=${encodeURIComponent(symbol)}`;
+        }
+
+        document.addEventListener('DOMContentLoaded', ()=>{
+            document.getElementById('assetSearch').addEventListener('input', renderAssets);
+            document.getElementById('toggleBuy').addEventListener('click', ()=>setMode('buy'));
+            document.getElementById('toggleSell').addEventListener('click', ()=>setMode('sell'));
+            // username
+            const name = (window.nobleChain && window.nobleChain.currentUser && window.nobleChain.currentUser.username) || 'User';
+            document.getElementById('profileName').textContent = name;
+            setMode(mode);
+            if(selectedAsset){ /* highlight or scroll - simple alert for now */ }
+        });
+    </script>
+</body>
+</html>

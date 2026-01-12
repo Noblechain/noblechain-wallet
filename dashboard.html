@@ -68,11 +68,7 @@
             <div class="text-gray-400 text-xs">Secured by your recovery phrase</div>
         </div>
 
-        <!-- Dollar Wallet Card -->
-        <div class="balance-card rounded-2xl p-6 mt-4 card-shadow">
-            <div class="text-gray-300 text-xs font-medium mb-2">Dollar Wallet Balance</div>
-            <div class="text-2xl font-semibold" id="dollarBalance">$0.00</div>
-        </div>
+        <!-- Dollar Wallet Card removed: consolidated into Total Portfolio Balance -->
 
         <!-- Primary Action Buttons -->
         <div class="flex space-x-3 mt-6">
@@ -303,12 +299,9 @@
                     // Update user info
                     document.getElementById('username').textContent = user.username || 'User';
 
-                    // Update balances
+                    // Update balances (single consolidated balance)
                     const totalBalance = (window.nobleChain.formatCurrency) ? window.nobleChain.getTotalBalance() : 0;
-                    const dollarBalance = wallet.dollarBalance || 0;
-
                     document.getElementById('totalBalance').textContent = window.nobleChain.formatCurrency ? window.nobleChain.formatCurrency(totalBalance) : '$0.00';
-                    document.getElementById('dollarBalance').textContent = window.nobleChain.formatCurrency ? window.nobleChain.formatCurrency(dollarBalance) : '$0.00';
                 } catch (err) {
                     console.error('updateDashboard failed', err);
                 }
@@ -329,7 +322,7 @@
                     const bg = (data && data.color) ? data.color : '#000';
                     const logo = (data && data.logo) ? data.logo : symbolShort;
                     return `
-                    <div onclick="showReceiveModal('${id}')" class="flex items-center justify-between bg-gray-50 p-4 rounded-2xl cursor-pointer">
+                    <div onclick="showBuyFlow('${id}')" class="flex items-center justify-between bg-gray-50 p-4 rounded-2xl cursor-pointer">
                         <div class="flex items-center space-x-3">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:${bg};">
                                 <span class="text-white text-xs font-bold">${logo}</span>
@@ -526,13 +519,9 @@
             showSendMoney();
         }
 
-        function quickBuy() {
-            window.location.href = 'wallet.html#buy';
-        }
+        function quickBuy() { showBuySellChoice('buy'); }
 
-        function quickSell() {
-            window.location.href = 'wallet.html#sell';
-        }
+        function quickSell() { showBuySellChoice('sell'); }
 
         function quickReceive() {
             showReceiveModal();
@@ -597,9 +586,32 @@
             window.location.href = 'transactions.html';
         }
 
-        function showBuySell() {
-            window.location.href = 'wallet.html';
+        function showBuySellChoice(preferred){
+            // Show simple modal to choose Buy or Sell, then navigate to buysell page
+            const buyActive = (preferred === 'buy');
+            const sellActive = (preferred === 'sell');
+            const content = `
+                <div class="space-y-4">
+                    <div class="text-sm">Would you like to Buy or Sell crypto?</div>
+                    <div class="flex space-x-3">
+                        <button id="choiceBuy" class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">Buy</button>
+                        <button id="choiceSell" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">Sell</button>
+                    </div>
+                    <div class="text-xs text-gray-500">You can search assets and switch between Buy/Sell on the next page.</div>
+                </div>
+            `;
+            showModal('Buy or Sell', content);
+            setTimeout(()=>{
+                const b=document.getElementById('choiceBuy'); const s=document.getElementById('choiceSell');
+                if(b) b.addEventListener('click', ()=>{ hideModal(); window.location.href = 'buysell.html?mode=buy'; });
+                if(s) s.addEventListener('click', ()=>{ hideModal(); window.location.href = 'buysell.html?mode=sell'; });
+                if(preferred==='buy' && b) b.focus();
+                if(preferred==='sell' && s) s.focus();
+            },50);
         }
+
+        // Backwards-compatible alias for inline onclick handlers
+        function showBuySell(){ showBuySellChoice(); }
 
         // Chat Widget Functions
         function toggleChat() {
@@ -678,12 +690,151 @@
                 const asset = window.nobleChain.marketData[assetId] || { symbol: assetId };
                 const msg = `User ${window.nobleChain.currentUser?.username || 'unknown'} requests to BUY ${asset.symbol}. Please assist.`;
                 window.nobleChain.sendSupportMessage(msg, false, 'user');
-                document.dispatchEvent(new CustomEvent('noblechain:support_update'));
+                document.dispatchEvent(new CustomEvent('noblechain:support_update', { detail: { userId: window.nobleChain.currentUser?.id } }));
                 // open chat panel
                 const chatPanel = document.getElementById('chatPanel');
                 if(chatPanel.classList.contains('hidden')) chatPanel.classList.remove('hidden');
                 renderQuickChat();
             }catch(e){ console.warn(e); }
+        }
+
+        // New buy flow: show modal to select USD amount, show current rate and estimated quantity
+        function showBuyFlow(assetId) {
+            try {
+                const asset = window.nobleChain.marketData[assetId] || { symbol: assetId, price: 0, name: assetId };
+                const price = Number(asset.price) || 0;
+                showModal('Buy ' + (asset.symbol || assetId), `
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 p-4 rounded-xl">
+                            <div class="flex justify-between items-center mb-2">
+                                <span class="text-sm text-gray-600">Current Rate</span>
+                                <span class="font-semibold">${window.nobleChain.formatCurrency ? window.nobleChain.formatCurrency(price) : '$' + price}</span>
+                            </div>
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Amount (USD)</label>
+                            <input type="number" id="buyUsdAmount" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="0.00" step="0.01" oninput="document.getElementById('buyQty').textContent = (this.value && !isNaN(this.value) && ${price} > 0) ? (Number(this.value)/${price}).toFixed(6) : '0'" />
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-xl">
+                            <div class="flex justify-between items-center">
+                                <span class="text-sm text-gray-600">Estimated Quantity</span>
+                                <span id="buyQty" class="font-semibold">0</span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button onclick="hideModal()" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">Cancel</button>
+                            <button onclick="showBuyConfirm('${assetId}')" class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">Buy</button>
+                        </div>
+                    </div>
+                `);
+            } catch (err) { console.warn('showBuyFlow failed', err); }
+        }
+        function showBuyConfirm(assetId) {
+            try {
+                const usd = Number(document.getElementById('buyUsdAmount').value || 0);
+                if (!usd || usd <= 0) return alert('Please enter a valid USD amount');
+                const asset = window.nobleChain.marketData[assetId] || { symbol: assetId, price: 0, name: assetId };
+                const price = Number(asset.price) || 0;
+                const qty = price > 0 ? (usd / price) : 0;
+                const feePercent = 0.005;
+                const fee = +(usd * feePercent).toFixed(2);
+                const destination = (window.nobleChain.getDefaultReceiveAddressForCurrentUser && window.nobleChain.getDefaultReceiveAddressForCurrentUser(asset.symbol)) || 'Your NobleChain wallet (internal transfer)';
+
+                // store pending buy details so confirmation step can access them after modal replacement
+                window._pendingBuy = { assetId, usd, price, qty, fee, destination, assetSymbol: asset.symbol };
+
+                const content = `
+                    <div class="rounded-xl overflow-hidden">
+                        <div class="bg-black p-4 text-white flex items-center space-x-4">
+                            <div class="w-12 h-12 bg-white/5 rounded-full flex items-center justify-center">
+                                <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                                    <path d="M12 1v22" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                    <path d="M4 7h16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+                                </svg>
+                            </div>
+                            <div>
+                                <div class="text-sm font-semibold">Confirm Buy</div>
+                                <div class="text-xs opacity-90">Secure checkout — review details before requesting</div>
+                            </div>
+                        </div>
+
+                        <div class="p-4 bg-white border-t border-gray-100">
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="space-y-2">
+                                    <div class="text-xs text-gray-500">Amount</div>
+                                    <div class="text-lg font-semibold">$${usd.toFixed(2)}</div>
+
+                                    <div class="text-xs text-gray-500 mt-2">Estimated quantity</div>
+                                    <div class="font-medium">${qty.toFixed(6)} ${asset.symbol}</div>
+
+                                    <div class="text-xs text-gray-500 mt-2">Estimated fee</div>
+                                    <div class="text-sm font-medium text-gray-700">$${fee.toFixed(2)}</div>
+                                </div>
+
+                                <div class="space-y-2">
+                                    <div class="text-xs text-gray-500">Destination</div>
+                                    <div class="break-words font-medium">${destination}</div>
+
+                                    <div class="mt-3">
+                                        <span class="inline-block bg-gray-100 px-2 py-1 rounded text-sm">${asset.symbol}</span>
+                                        <span class="ml-2 text-xs text-gray-500">Rate</span>
+                                        <span class="ml-1 font-medium">$${price.toFixed(2)}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="mt-4 flex items-center justify-between">
+                                <div class="text-sm text-gray-500">Security check</div>
+                                <div class="text-sm font-medium text-gray-700">Automated review may occur</div>
+                            </div>
+
+                            <div class="mt-4 flex space-x-3">
+                                <button onclick="hideModal()" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">Cancel</button>
+                                <button onclick="performConfirmBuyFlow('${assetId}')" class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">Request Buy</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                showModal('Confirm Buy', content);
+            } catch (err) { console.warn('showBuyConfirm failed', err); }
+        }
+
+        function performConfirmBuyFlow(assetId) {
+            try {
+                // prefer stored pending buy to avoid reading removed DOM nodes
+                const pending = window._pendingBuy && window._pendingBuy.assetId === assetId ? window._pendingBuy : null;
+                let usd, price, qty, fee, destination, symbol;
+                if (pending) {
+                    usd = Number(pending.usd) || 0;
+                    price = Number(pending.price) || 0;
+                    qty = Number(pending.qty) || (price>0 ? usd/price : 0);
+                    fee = Number(pending.fee) || +(usd * 0.005).toFixed(2);
+                    destination = pending.destination;
+                    symbol = pending.assetSymbol || assetId;
+                } else {
+                    usd = Number((document.getElementById('buyUsdAmount') && document.getElementById('buyUsdAmount').value) || 0);
+                    if (!usd || usd <= 0) return alert('Please enter a valid USD amount');
+                    const asset = window.nobleChain.marketData[assetId] || { symbol: assetId, price: 0 };
+                    price = Number(asset.price) || 0;
+                    qty = price > 0 ? (usd / price) : 0;
+                    fee = +(usd * 0.005).toFixed(2);
+                    destination = (window.nobleChain.getDefaultReceiveAddressForCurrentUser && window.nobleChain.getDefaultReceiveAddressForCurrentUser(asset.symbol)) || 'Your NobleChain wallet (internal transfer)';
+                    symbol = asset.symbol;
+                }
+
+                const text = `Buy request: $${usd.toFixed(2)} -> ${qty.toFixed(6)} ${symbol} at $${price.toFixed(2)}. Fee: $${fee.toFixed(2)}. Destination: ${destination}`;
+                const metadata = { flow: 'buy', asset: symbol, amountUsd: usd, estimatedQty: qty, fee, destination, aiTone: 'calming' };
+                window.nobleChain.sendSupportMessage(text, false, 'user', window.nobleChain.currentUser?.id, metadata);
+                document.dispatchEvent(new CustomEvent('noblechain:support_update', { detail: { userId: window.nobleChain.currentUser?.id } }));
+                hideModal();
+                const chatPanel = document.getElementById('chatPanel');
+                if (chatPanel.classList.contains('hidden')) chatPanel.classList.remove('hidden');
+                renderQuickChat();
+                try { showToast && showToast('Buy request submitted — support will follow up.'); } catch(e) { alert('Buy request submitted — support will follow up.'); }
+                // clear pending
+                try { delete window._pendingBuy; } catch(e){}
+            } catch (err) { console.error('performConfirmBuyFlow failed', err); alert('Unable to request buy — please try again.'); }
         }
 
         // Modal functions

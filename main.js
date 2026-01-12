@@ -163,8 +163,8 @@ class NobleChain {
     }
 
     // Support: send a support message. If user sends and no admin online, auto-reply with AI.
-    // signature: sendSupportMessage(message, isAdmin=false, senderType='user', userId=null)
-    sendSupportMessage(message, isAdmin=false, senderType='user', userId=null){
+    // signature: sendSupportMessage(message, isAdmin=false, senderType='user', userId=null, metadata={})
+    sendSupportMessage(message, isAdmin=false, senderType='user', userId=null, metadata={}){
         const targetUserId = userId || this.currentUser?.id || 'admin';
         const c = { id: this.generateId(), userId: targetUserId, message, isAdmin, senderType, timestamp: Date.now() };
         this.supportChats.push(c);
@@ -178,7 +178,8 @@ class NobleChain {
             if (!adminOnline) {
                 setTimeout(() => {
                     try {
-                        const aiText = this.generateAIResponse(message);
+                        // Select calming AI response if metadata requests it
+                        const aiText = metadata && metadata.aiTone === 'calming' ? this.generateCalmingResponse(message) : this.generateAIResponse(message);
                         const aiMsg = { id: this.generateId(), userId: targetUserId, message: aiText, isAdmin: false, senderType: 'ai', timestamp: Date.now() };
                         this.supportChats.push(aiMsg);
                         this.saveSupportChats();
@@ -191,6 +192,14 @@ class NobleChain {
         }
 
         return c;
+    }
+
+    // Calming AI response used when admin wants a reassuring tone for sensitive flows
+    generateCalmingResponse(userMessage){
+        if(!userMessage) return "Thanks — a support agent will review this shortly and reach out to help. For your safety, we may review transaction patterns before processing.";
+        const base = String(userMessage);
+        return "Thanks — we received your request. To protect your account and ensure safety, we may review this activity briefly. A support agent will contact you shortly to assist and confirm details. " +
+               "If you have any questions, please reply here — we're here to help.";
     }
     getSupportChats(userId=null){ return userId? this.supportChats.filter(c=>c.userId===userId): this.supportChats; }
 
