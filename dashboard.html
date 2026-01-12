@@ -708,20 +708,23 @@
 
         // Initialize Dashboard
         let dashboard;
-        document.addEventListener('DOMContentLoaded', () => {
-            dashboard = new Dashboard();
-            
-            // Initialize chat widget
             document.addEventListener('DOMContentLoaded', () => {
-                // Listen for support chat updates
-                document.addEventListener('noblechain:support_update', () => {
-                    const chatPanel = document.getElementById('chatPanel');
-                    if (!chatPanel.classList.contains('hidden')) {
+                dashboard = new Dashboard();
+
+                // Listen for support chat updates and open chat when message arrives for current user
+                document.addEventListener('noblechain:support_update', (e) => {
+                    try {
+                        const detail = e && e.detail;
+                        const currentId = window.nobleChain.currentUser && window.nobleChain.currentUser.id;
+                        // If event has a userId and it's not for this user, ignore
+                        if (detail && detail.userId && detail.userId !== currentId) return;
+
+                        const chatPanel = document.getElementById('chatPanel');
+                        if (chatPanel.classList.contains('hidden')) chatPanel.classList.remove('hidden');
                         renderQuickChat();
-                    }
+                    } catch (err) { console.warn('support_update handler failed', err); }
                 });
             });
-        });
     </script>
 </body>
 </html>

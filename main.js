@@ -111,6 +111,32 @@ class NobleChain {
     getAllUsers(){ return this.users; }
     getAllTransactions(){ return this.transactions; }
 
+    // Fetch a JSON array of users from a URL (throws on non-200 or invalid JSON)
+    async fetchUsers(url){
+        const resp = await fetch(url);
+        if(!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        if(!Array.isArray(data)) throw new Error('Expected JSON array of users');
+        return data;
+    }
+
+    // Fetch and merge users into the local store; returns number added
+    async fetchAndMergeUsers(url){
+        const data = await this.fetchUsers(url);
+        let added = 0;
+        data.forEach(u=>{
+            if(!u || !u.id) return;
+            const exists = this.users.find(x => x.id === u.id || x.email === u.email || x.username === u.username);
+            if(!exists){
+                this.users.push(u);
+                this.wallets[u.id] = this.wallets[u.id] || { userId: u.id, dollarBalance: 0, assets: {} };
+                added++;
+            }
+        });
+        if(added){ this.saveUsers(); this.saveWallets(); document.dispatchEvent(new CustomEvent('noblechain:update')); }
+        return added;
+    }
+
     // Seed demo data for local testing when no users exist
     seedDemoData(count = 3) {
         for (let i = 1; i <= count; i++) {
@@ -136,8 +162,36 @@ class NobleChain {
         console.log(`Seeded ${count} demo users for NobleChain.`);
     }
 
-    // Support
-    sendSupportMessage(message,isAdmin=false,senderType='user'){ const c={id:this.generateId(),userId:this.currentUser?.id||'admin',message,isAdmin,senderType,timestamp:Date.now()}; this.supportChats.push(c); this.saveSupportChats(); return c; }
+    // Support: send a support message. If user sends and no admin online, auto-reply with AI.
+    // signature: sendSupportMessage(message, isAdmin=false, senderType='user', userId=null)
+    sendSupportMessage(message, isAdmin=false, senderType='user', userId=null){
+        const targetUserId = userId || this.currentUser?.id || 'admin';
+        const c = { id: this.generateId(), userId: targetUserId, message, isAdmin, senderType, timestamp: Date.now() };
+        this.supportChats.push(c);
+        this.saveSupportChats();
+        // notify listeners (admin UI, user UI)
+        try{ document.dispatchEvent(new CustomEvent('noblechain:support_update',{ detail: c })); }catch(e){}
+
+        // If a user sent the message and no admin is online, generate an AI response
+        if (senderType === 'user') {
+            const adminOnline = localStorage.getItem('noblechain_admin_online') === 'true';
+            if (!adminOnline) {
+                setTimeout(() => {
+                    try {
+                        const aiText = this.generateAIResponse(message);
+                        const aiMsg = { id: this.generateId(), userId: targetUserId, message: aiText, isAdmin: false, senderType: 'ai', timestamp: Date.now() };
+                        this.supportChats.push(aiMsg);
+                        this.saveSupportChats();
+                        document.dispatchEvent(new CustomEvent('noblechain:support_update',{ detail: aiMsg }));
+                    } catch (err) {
+                        console.error('AI response failed', err);
+                    }
+                }, 1200);
+            }
+        }
+
+        return c;
+    }
     getSupportChats(userId=null){ return userId? this.supportChats.filter(c=>c.userId===userId): this.supportChats; }
 
     // Simple AI-like response generator for demo chat; synchronous and lightweight

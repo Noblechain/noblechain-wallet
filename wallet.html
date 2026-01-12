@@ -260,6 +260,26 @@
                     this.updateWallet();
                     this.renderAssets();
                 });
+
+                // Listen for support chat updates and prompt user to open full chat
+                document.addEventListener('noblechain:support_update', (e) => {
+                    try {
+                        const detail = e && e.detail;
+                        const currentId = window.nobleChain.currentUser && window.nobleChain.currentUser.id;
+                        if (detail && detail.userId && detail.userId !== currentId) return;
+
+                        // Show a small modal prompting user to open the full support chat
+                        showModal('Support Message', `
+                            <div class="space-y-4">
+                                <p class="text-sm text-gray-700">You have a new message from support.</p>
+                                <div class="flex space-x-3">
+                                    <button onclick="hideModal()" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">Close</button>
+                                    <button onclick="window.location.href='support.html'" class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">Open Chat</button>
+                                </div>
+                            </div>
+                        `);
+                    } catch (err) { console.warn('support_update in wallet failed', err); }
+                });
             }
         }
 

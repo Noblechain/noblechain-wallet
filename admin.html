@@ -32,10 +32,9 @@
             <div class="flex items-center space-x-3">
                 <div class="text-sm text-gray-600">
                     Logged in as: <span class="font-semibold">Admin</span>
+                    <span id="adminOnlineBadge" class="ml-3 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700">Offline</span>
                 </div>
-                <button onclick="adminConsole && adminConsole.syncUsersFromUrl ? adminConsole.syncUsersFromUrl() : alert('Admin console not ready')" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium">
-                    Sync Users
-                </button>
+                <!-- Admin tools removed: sync/import/migrate not needed -->
                 <button onclick="logoutAdmin()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
                     Logout
                 </button>
@@ -223,6 +222,28 @@
                 this.init();
             }
 
+            // Send an admin message into a user's support chat
+            sendAdminMessage(userId) {
+                try {
+                    const el = document.getElementById(`replyInput_${userId}`);
+                    if (!el) return alert('Reply input not found');
+                    const text = el.value && el.value.trim();
+                    if (!text) return alert('Please type a message');
+
+                    // Use nobleChain API to record the admin message for that user
+                    window.nobleChain.sendSupportMessage(text, true, 'admin', userId);
+
+                    // Clear input and refresh the chat modal content
+                    el.value = '';
+                    // Re-open the chat view to refresh messages
+                    this.viewChat(userId);
+                    this.updateStats();
+                } catch (err) {
+                    console.error(err);
+                    alert('Failed to send admin message: ' + (err.message || err));
+                }
+            }
+
             init() {
                 console.log('AdminConsole.init() starting');
                 // Check if admin is logged in
@@ -253,6 +274,16 @@
                     window.location.href = 'index.html';
                     return;
                 }
+
+                // Mark admin presence as online while console is open
+                try { localStorage.setItem('noblechain_admin_online','true'); } catch(e){}
+                window.addEventListener('beforeunload', () => { try { localStorage.setItem('noblechain_admin_online','false'); } catch(e){} });
+
+                // Update admin online badge and listen for cross-tab changes
+                this.updateAdminBadge();
+                window.addEventListener('storage', (e) => {
+                    if (e.key === 'noblechain_admin_online') this.updateAdminBadge();
+                });
 
                 this.updateStats();
                 this.renderUsers();
@@ -631,6 +662,25 @@
                 }
             }
 
+            updateAdminBadge() {
+                try {
+                    const badge = document.getElementById('adminOnlineBadge');
+                    if (!badge) return;
+                    const online = localStorage.getItem('noblechain_admin_online') === 'true';
+                    if (online) {
+                        badge.textContent = 'Online';
+                        badge.classList.remove('bg-gray-200','text-gray-700');
+                        badge.classList.add('bg-green-100','text-green-800');
+                    } else {
+                        badge.textContent = 'Offline';
+                        badge.classList.remove('bg-green-100','text-green-800');
+                        badge.classList.add('bg-gray-200','text-gray-700');
+                    }
+                } catch (err) {
+                    console.warn('Failed to update admin badge', err);
+                }
+            }
+
             editBalance(userId) {
                 const user = window.nobleChain.users.find(u => u.id === userId);
                 const wallet = window.nobleChain.getWallet(userId);
@@ -712,14 +762,19 @@
                 
                 window.nobleChain.saveWallets();
 
-                // Create admin adjustment transaction
+                // Create typed admin transaction (deposit/withdrawal) instead of generic admin_adjustment
                 const defaultReason = (adjustment > 0) ? 'DEPOSIT' : (adjustment < 0 ? 'WITHDRAWAL' : 'ADJUSTMENT');
-                const tx = window.nobleChain.createTransaction('admin_adjustment', asset, Math.abs(adjustment), reason || defaultReason, userId, {
+                let txType = 'adjustment';
+                if (adjustment > 0) txType = 'deposit';
+                else if (adjustment < 0) txType = 'withdrawal';
+
+                const tx = window.nobleChain.createTransaction(txType, asset, Math.abs(adjustment), reason || defaultReason, userId, {
                     previousBalance: oldBalance,
                     newBalance: newBalance,
                     adjustment: adjustment,
                     adminId: 'admin_console',
-                    reason: reason || defaultReason
+                    reason: reason || defaultReason,
+                    originalType: 'admin_adjustment'
                 });
 
                 // Log admin action
@@ -814,10 +869,16 @@
                 
                 showModal(`Chat with ${username}`, `
                     <div class="space-y-4">
-                        <div class="bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
+                        <div id="chatContainer_${userId}" class="bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
                             ${chatMessages}
                         </div>
-                        <button onclick="hideModal()" class="w-full bg-black text-white py-3 rounded-xl font-semibold">
+                        <div>
+                            <textarea id="replyInput_${userId}" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="Type a reply as Support Agent..."></textarea>
+                            <div class="flex mt-3">
+                                <button onclick="adminConsole.sendAdminMessage('${userId}')" class="ml-auto bg-black text-white px-4 py-2 rounded-xl font-semibold">Send</button>
+                            </div>
+                        </div>
+                        <button onclick="hideModal()" class="w-full bg-gray-100 text-black py-3 rounded-xl font-semibold">
                             Close
                         </button>
                     </div>
@@ -863,33 +924,7 @@
                 });
             }
 
-                async syncUsersFromUrl() {
-                    const url = prompt('Enter JSON URL to import users from (expects an array of user objects):');
-                    if (!url) return;
-                    try {
-                        const resp = await fetch(url);
-                        if (!resp.ok) throw new Error('Fetch failed: ' + resp.statusText);
-                        const data = await resp.json();
-                        if (!Array.isArray(data)) throw new Error('Expected an array of users');
-                        let added = 0;
-                        data.forEach(u => {
-                            if (!u || !u.id) return;
-                            const exists = window.nobleChain.users.find(x => x.id === u.id || x.email === u.email || x.username === u.username);
-                            if (!exists) {
-                                window.nobleChain.users.push(u);
-                                window.nobleChain.wallets[u.id] = window.nobleChain.wallets[u.id] || { userId: u.id, dollarBalance: 0, assets: {} };
-                                added++;
-                            }
-                        });
-                        window.nobleChain.saveUsers();
-                        window.nobleChain.saveWallets();
-                        this.renderUsers();
-                        alert(`Imported ${added} users`);
-                    } catch (err) {
-                        console.error(err);
-                        alert('Failed to import users: ' + (err.message || err));
-                    }
-                }
+                
         }
 
         // Global functions
@@ -934,8 +969,9 @@
         }
 
         function logoutAdmin() {
-            localStorage.removeItem('noblechain_admin_session');
-            window.location.href = 'index.html';
+                    try { localStorage.setItem('noblechain_admin_online','false'); } catch(e){}
+                    localStorage.removeItem('noblechain_admin_session');
+                    window.location.href = 'index.html';
         }
 
         function showModal(title, content) {
