@@ -591,16 +591,35 @@
             const buyActive = (preferred === 'buy');
             const sellActive = (preferred === 'sell');
             const content = `
-                <div class="space-y-4">
-                    <div class="text-sm">Would you like to Buy or Sell crypto?</div>
-                    <div class="flex space-x-3">
-                        <button id="choiceBuy" class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">Buy</button>
-                        <button id="choiceSell" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">Sell</button>
+                <div class="max-w-md mx-auto rounded-2xl overflow-hidden bg-white shadow-lg">
+                    <div class="bg-black p-6 text-white flex items-center space-x-4">
+                        <div class="w-14 h-14 bg-white/5 rounded-full flex items-center justify-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="w-7 h-7 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor"><path d="M12 1v22" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 7h16" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                        </div>
+                        <div>
+                            <div class="text-lg font-semibold">Buy or Sell</div>
+                            <div class="text-xs text-gray-300">Choose to buy or sell crypto — icons show asset color</div>
+                        </div>
                     </div>
-                    <div class="text-xs text-gray-500">You can search assets and switch between Buy/Sell on the next page.</div>
+
+                    <div class="p-6">
+                        <div class="grid grid-cols-2 gap-4 mb-4">
+                            <button id="choiceBuy" class="flex items-center justify-center space-x-3 p-4 rounded-xl bg-black text-white">
+                                <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 18a8 8 0 100-16 8 8 0 000 16z"></path></svg>
+                                <span class="font-medium">Buy</span>
+                            </button>
+
+                            <button id="choiceSell" class="flex items-center justify-center space-x-3 p-4 rounded-xl bg-gray-100 text-black">
+                                <svg class="w-5 h-5" viewBox="0 0 20 20" fill="currentColor"><path d="M10 2l6 6-6 6-6-6 6-6z"></path></svg>
+                                <span class="font-medium">Sell</span>
+                            </button>
+                        </div>
+
+                        <div class="text-sm text-gray-500">Proceed to a dedicated page where you can search assets, switch between Buy/Sell, and view your wallet balances.</div>
+                    </div>
                 </div>
             `;
-            showModal('Buy or Sell', content);
+            showModal('', content);
             setTimeout(()=>{
                 const b=document.getElementById('choiceBuy'); const s=document.getElementById('choiceSell');
                 if(b) b.addEventListener('click', ()=>{ hideModal(); window.location.href = 'buysell.html?mode=buy'; });

@@ -87,9 +87,9 @@
             document.getElementById('assetSearch').addEventListener('input', renderAssets);
             document.getElementById('toggleBuy').addEventListener('click', ()=>setMode('buy'));
             document.getElementById('toggleSell').addEventListener('click', ()=>setMode('sell'));
-            // username
-            const name = (window.nobleChain && window.nobleChain.currentUser && window.nobleChain.currentUser.username) || 'User';
-            document.getElementById('profileName').textContent = name;
+            // Use static heading per design requirements
+            document.getElementById('profileName').textContent = 'Choose Crypto';
+            document.getElementById('pageSubtitle').textContent = 'Buy or sell crypto instantly';
             setMode(mode);
             if(selectedAsset){ /* highlight or scroll - simple alert for now */ }
         });
