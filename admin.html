@@ -34,7 +34,12 @@
                     Logged in as: <span class="font-semibold">Admin</span>
                     <span id="adminOnlineBadge" class="ml-3 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-700">Offline</span>
                 </div>
-                <!-- Admin tools removed: sync/import/migrate not needed -->
+                <div class="text-sm text-gray-600">
+                    DB: <span id="dbStatus" class="ml-2 inline-flex items-center px-2 py-0.5 rounded-full text-xs bg-red-100 text-red-800">Disconnected</span>
+                </div>
+                <button id="connectBtn" onclick="showConnectModal()" class="bg-black text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    Connect DB
+                </button>
                 <button onclick="logoutAdmin()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
                     Logout
                 </button>
@@ -973,6 +978,81 @@
                     localStorage.removeItem('noblechain_admin_session');
                     window.location.href = 'index.html';
         }
+
+        // Supabase / Connect UI helpers (client-side scaffolding)
+        function showConnectModal(){
+            const cfg = loadSupabaseConfig() || { url: '', key: '' };
+            showModal('Connect Remote DB', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="text-xs text-gray-500">Supabase URL</label>
+                        <input id="supabase_url" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="https://xyz.supabase.co" value="${cfg.url || ''}" />
+                    </div>
+                    <div>
+                        <label class="text-xs text-gray-500">Supabase ANON Key</label>
+                        <input id="supabase_key" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="anon-key" value="${cfg.key || ''}" />
+                    </div>
+                    <div class="text-xs text-gray-500">Warning: client-side anon keys are exposed. Use for demo only.</div>
+                    <div class="flex space-x-3">
+                        <button onclick="hideModal()" class="flex-1 bg-gray-100 py-3 rounded-xl">Cancel</button>
+                        <button onclick="saveSupabaseConfig()" class="flex-1 bg-black text-white py-3 rounded-xl">Connect</button>
+                    </div>
+                </div>
+            `);
+        }
+
+        function saveSupabaseConfig(){
+            const url = document.getElementById('supabase_url')?.value?.trim();
+            const key = document.getElementById('supabase_key')?.value?.trim();
+            if(!url || !key) return alert('Please provide both URL and ANON key');
+            const cfg = { url, key };
+            try{
+                sessionStorage.setItem('noblechain_supabase', JSON.stringify(cfg));
+            }catch(e){ console.warn('sessionStorage error', e); }
+            // Expose to nobleChain runtime for other pages
+            try{ window.nobleChain.supabaseConfig = cfg; }catch(e){}
+            updateDBStatus(true);
+            hideModal();
+            alert('Supabase config saved to session. Use push/pull to sync.');
+        }
+
+        function loadSupabaseConfig(){
+            try{
+                const raw = sessionStorage.getItem('noblechain_supabase');
+                if(!raw) return null;
+                return JSON.parse(raw);
+            }catch(e){ return null; }
+        }
+
+        function disconnectSupabase(){
+            try{ sessionStorage.removeItem('noblechain_supabase'); }catch(e){}
+            try{ delete window.nobleChain.supabaseConfig; }catch(e){}
+            updateDBStatus(false);
+            alert('Disconnected from remote DB (session cleared).');
+        }
+
+        function updateDBStatus(connected){
+            try{
+                const el = document.getElementById('dbStatus');
+                if(!el) return;
+                const cfg = loadSupabaseConfig();
+                const isConnected = typeof connected === 'boolean' ? connected : !!cfg;
+                if(isConnected){
+                    el.textContent = 'Connected';
+                    el.classList.remove('bg-red-100','text-red-800');
+                    el.classList.add('bg-green-100','text-green-800');
+                } else {
+                    el.textContent = 'Disconnected';
+                    el.classList.remove('bg-green-100','text-green-800');
+                    el.classList.add('bg-red-100','text-red-800');
+                }
+            }catch(e){ console.warn(e); }
+        }
+
+        // Initialize DB status indicator on load
+        document.addEventListener('DOMContentLoaded', () => {
+            updateDBStatus();
+        });
 
         function showModal(title, content) {
             document.getElementById('balanceModalContent').innerHTML = `
