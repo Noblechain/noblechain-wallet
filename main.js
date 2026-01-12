@@ -213,6 +213,218 @@ class NobleChain {
         return "Thanks for your message. A support agent will reply soon. For quick help, include your username and a short description.";
     }
 
+    // Supabase client scaffolding (client-only). Uses session-stored config saved by admin UI.
+    initSupabaseClient(){
+        try{
+            const cfg = this.supabaseConfig || (function(){ try{ return JSON.parse(sessionStorage.getItem('noblechain_supabase')||'null'); }catch(e){return null;} })();
+            if(!cfg || !cfg.url || !cfg.key) return null;
+            // UMD exposes `supabase` on window
+            if(!window.supabase) {
+                console.warn('Supabase library not loaded (window.supabase missing)');
+                return null;
+            }
+            // Reuse existing client when possible to avoid multiple GoTrue instances
+            if(this.supabase && this.supabaseConfig && this.supabaseConfig.url === cfg.url && this.supabaseConfig.key === cfg.key){
+                return this.supabase;
+            }
+            try{
+                this.supabase = window.supabase.createClient(cfg.url, cfg.key);
+                this.supabaseConfig = cfg;
+                return this.supabase;
+            }catch(err){ console.warn('Failed to create supabase client', err); return null; }
+        }catch(e){ console.warn('initSupabaseClient error', e); return null; }
+    }
+
+    // Pull remote data (users, wallets, transactions, support) and merge into local store
+    async fetchRemoteData(){
+        const sb = this.initSupabaseClient();
+        if(!sb) throw new Error('Supabase not configured. Use Admin Console Connect.');
+        const summary = { users:0, wallets:0, transactions:0, support:0 };
+        try{
+            const [{ data: rUsers, error: eU }, { data: rWallets, error: eW }, { data: rTx, error: eT }, { data: rSupport, error: eS }] = await Promise.all([
+                sb.from('users').select('*').limit(1000),
+                sb.from('wallets').select('*').limit(1000),
+                sb.from('transactions').select('*').limit(2000),
+                sb.from('support').select('*').limit(2000)
+            ]);
+            if(eU) console.warn('users fetch error', eU);
+            if(eW) console.warn('wallets fetch error', eW);
+            if(eT) console.warn('transactions fetch error', eT);
+            if(eS) console.warn('support fetch error', eS);
+
+            // Merge users (non-destructive: only add missing)
+            (rUsers||[]).forEach(u => {
+                if(!u || !u.id) return;
+                const exists = this.users.find(x=>x.id===u.id || x.email===u.email || x.username===u.username);
+                if(!exists){ this.users.push(u); summary.users++; }
+            });
+
+            // Merge wallets
+            (rWallets||[]).forEach(w => {
+                if(!w || !w.userId) return;
+                if(!this.wallets[w.userId]){ this.wallets[w.userId] = { userId: w.userId, dollarBalance: w.dollarBalance || 0, assets: w.assets || {} }; summary.wallets++; }
+            });
+
+            // Merge transactions
+            (rTx||[]).forEach(tx => { if(!tx || !tx.id) return; if(!this.transactions.find(t=>t.id===tx.id)){ this.transactions.push(tx); summary.transactions++; } });
+
+            // Merge support chats
+            (rSupport||[]).forEach(s => { if(!s || !s.id) return; if(!this.supportChats.find(x=>x.id===s.id)){ this.supportChats.push(s); summary.support++; } });
+
+            // Persist
+            if(summary.users) this.saveUsers();
+            if(summary.wallets) this.saveWallets();
+            if(summary.transactions) this.saveTransactions();
+            if(summary.support) this.saveSupportChats();
+
+            document.dispatchEvent(new CustomEvent('noblechain:update',{ detail: summary }));
+            return summary;
+        }catch(err){ console.error('fetchRemoteData failed', err); throw err; }
+    }
+
+    // Push local arrays to remote (upsert). Be cautious: this is client-side and uses anon keys.
+    async pushLocalData(){
+        const sb = this.initSupabaseClient();
+        if(!sb) throw new Error('Supabase not configured. Use Admin Console Connect.');
+        const results = { users:null, wallets:null, transactions:null, support:null };
+        try{
+            // Upsert users
+            if(Array.isArray(this.users) && this.users.length>0){
+                const { data, error } = await sb.from('users').upsert(this.users);
+                if(error) console.warn('users upsert error', error); results.users = { data, error };
+            }
+
+            if(this.wallets && Object.keys(this.wallets).length>0){
+                // Convert wallet map to array for upsert
+                const arr = Object.values(this.wallets).map(w => ({ userId: w.userId, dollarBalance: w.dollarBalance, assets: w.assets }));
+                const { data, error } = await sb.from('wallets').upsert(arr);
+                if(error) console.warn('wallets upsert error', error); results.wallets = { data, error };
+            }
+
+            if(Array.isArray(this.transactions) && this.transactions.length>0){
+                const { data, error } = await sb.from('transactions').upsert(this.transactions);
+                if(error) console.warn('transactions upsert error', error); results.transactions = { data, error };
+            }
+
+            if(Array.isArray(this.supportChats) && this.supportChats.length>0){
+                const { data, error } = await sb.from('support').upsert(this.supportChats);
+                if(error) console.warn('support upsert error', error); results.support = { data, error };
+            }
+
+            return results;
+        }catch(err){ console.error('pushLocalData failed', err); throw err; }
+    }
+
+    // Subscribe to Supabase realtime changes for core tables and merge them locally.
+    subscribeToChanges(tables = ['users','wallets','transactions','support']){
+        try{
+            if(this._supabaseSubscriptions && this._supabaseSubscriptions.length>0){ console.warn('Already subscribed to realtime changes'); return this._supabaseSubscriptions; }
+            const sb = this.initSupabaseClient();
+            if(!sb) throw new Error('Supabase not configured. Use Admin Console Connect.');
+
+            this._supabaseSubscriptions = [];
+
+            tables.forEach(tbl => {
+                try{
+                    // Use Supabase JS v2 realtime channel with postgres_changes
+                    const channel = sb.channel(`realtime:${tbl}`);
+                    channel.on('postgres_changes', { event: '*', schema: 'public', table: tbl }, (payload) => {
+                        try{ this._handleRealtimePayload(tbl, payload); }catch(e){ console.warn('handleRealtime error', e); }
+                    });
+                    // subscribe() returns a Promise-like object; keep the channel for unsubscribe
+                    channel.subscribe();
+                    this._supabaseSubscriptions.push({ table: tbl, channel });
+                }catch(e){ console.warn('subscribe error for', tbl, e); }
+            });
+
+            console.log('Subscribed to realtime tables:', tables.join(','));
+            return this._supabaseSubscriptions;
+        }catch(err){ console.error('subscribeToChanges failed', err); throw err; }
+    }
+
+    // Unsubscribe any active Supabase realtime subscriptions
+    unsubscribeSupabaseSubscriptions(){
+        try{
+            if(!this._supabaseSubscriptions || this._supabaseSubscriptions.length===0) return;
+            this._supabaseSubscriptions.forEach(entry => {
+                try{
+                    const ch = entry.channel || entry.sub;
+                    if(!ch) return;
+                    // v2 channel unsubscribe
+                    if(typeof ch.unsubscribe === 'function') ch.unsubscribe();
+                    // also attempt legacy removal methods
+                    else if(typeof ch.remove === 'function') ch.remove();
+                }catch(e){ console.warn('unsubscribe error', e); }
+            });
+            this._supabaseSubscriptions = [];
+            console.log('Unsubscribed from Supabase realtime');
+        }catch(e){ console.warn('unsubscribeSupabaseSubscriptions error', e); }
+    }
+
+    // Internal handler to merge realtime payloads into local state
+    _handleRealtimePayload(table, payload){
+        // payload may contain different shapes depending on supabase client version
+        const event = payload.event || payload.eventType || payload.type || (payload.new ? 'INSERT' : payload.old ? 'UPDATE' : 'UNKNOWN');
+        const record = payload.new || payload.record || payload.current || payload.data || null;
+        const old = payload.old || payload.previous || null;
+
+        if(!record && !old) return;
+
+        if(table === 'users'){
+            if(event === 'DELETE' || event === 'delete'){
+                this.users = this.users.filter(u => u.id !== (old?.id || record?.id));
+            } else {
+                const idx = this.users.findIndex(u => u.id === record.id);
+                if(idx >= 0) this.users[idx] = Object.assign({}, this.users[idx], record);
+                else this.users.push(record);
+            }
+            this.saveUsers();
+            document.dispatchEvent(new CustomEvent('noblechain:update',{ detail: { table:'users' } }));
+            return;
+        }
+
+        if(table === 'wallets'){
+            const userId = record.userId || (old && old.userId);
+            if(!userId) return;
+            if(event === 'DELETE' || event === 'delete'){
+                delete this.wallets[userId];
+            } else {
+                // Ensure assets is an object (remote may send JSON string)
+                const assets = (typeof record.assets === 'string') ? (function(){ try{ return JSON.parse(record.assets); }catch(e){return {}; } })() : (record.assets || {});
+                this.wallets[userId] = Object.assign({}, this.wallets[userId] || { userId, dollarBalance:0, assets:{} }, { dollarBalance: record.dollarBalance || 0, assets });
+            }
+            this.saveWallets();
+            document.dispatchEvent(new CustomEvent('noblechain:update',{ detail: { table:'wallets' } }));
+            return;
+        }
+
+        if(table === 'transactions'){
+            if(event === 'DELETE' || event === 'delete'){
+                this.transactions = this.transactions.filter(t => t.id !== (old?.id || record?.id));
+            } else {
+                const idx = this.transactions.findIndex(t => t.id === record.id);
+                if(idx >= 0) this.transactions[idx] = Object.assign({}, this.transactions[idx], record);
+                else this.transactions.push(record);
+            }
+            this.saveTransactions();
+            document.dispatchEvent(new CustomEvent('noblechain:update',{ detail: { table:'transactions' } }));
+            return;
+        }
+
+        if(table === 'support'){
+            if(event === 'DELETE' || event === 'delete'){
+                this.supportChats = this.supportChats.filter(s => s.id !== (old?.id || record?.id));
+            } else {
+                const idx = this.supportChats.findIndex(s => s.id === record.id);
+                if(idx >= 0) this.supportChats[idx] = Object.assign({}, this.supportChats[idx], record);
+                else this.supportChats.push(record);
+            }
+            this.saveSupportChats();
+            document.dispatchEvent(new CustomEvent('noblechain:support_update',{ detail: record }));
+            return;
+        }
+    }
+
     // Simple internal sendMoney implementation for demo purposes
     sendMoney(recipientUsername, amount){
         if(!this.currentUser) throw new Error('Not signed in');

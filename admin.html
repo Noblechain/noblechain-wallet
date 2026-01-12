@@ -40,6 +40,14 @@
                 <button id="connectBtn" onclick="showConnectModal()" class="bg-black text-white px-4 py-2 rounded-lg text-sm font-medium">
                     Connect DB
                 </button>
+                <button id="pullBtn" onclick="doPull()" class="bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm font-medium">Pull</button>
+                <button id="pushBtn" onclick="doPush()" class="bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm font-medium">Push</button>
+                <button id="disconnectDbBtn" onclick="disconnectSupabase()" class="bg-gray-100 text-black px-3 py-2 rounded-lg text-sm font-medium">Disconnect</button>
+                <div class="flex items-center space-x-2">
+                    <label class="text-xs text-gray-500">Auto-sync</label>
+                    <input id="autoSyncToggle" type="checkbox" onchange="toggleAutoSync(this.checked)" />
+                </div>
+                <div class="text-xs text-gray-500 ml-3">Last sync: <span id="lastSync">Never</span></div>
                 <button onclick="logoutAdmin()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
                     Logout
                 </button>
@@ -219,6 +227,7 @@
     </div>
 
     <script src="main.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js/dist/umd/supabase.min.js"></script>
     <script>
         class AdminConsole {
             constructor() {
@@ -1001,19 +1010,32 @@
             `);
         }
 
-        function saveSupabaseConfig(){
+        async function saveSupabaseConfig(){
             const url = document.getElementById('supabase_url')?.value?.trim();
             const key = document.getElementById('supabase_key')?.value?.trim();
             if(!url || !key) return alert('Please provide both URL and ANON key');
             const cfg = { url, key };
+            // Attempt to initialize client and run a lightweight test query to validate credentials
             try{
-                sessionStorage.setItem('noblechain_supabase', JSON.stringify(cfg));
-            }catch(e){ console.warn('sessionStorage error', e); }
-            // Expose to nobleChain runtime for other pages
-            try{ window.nobleChain.supabaseConfig = cfg; }catch(e){}
-            updateDBStatus(true);
-            hideModal();
-            alert('Supabase config saved to session. Use push/pull to sync.');
+                // Temporarily set config on nobleChain for init
+                if(window.nobleChain) window.nobleChain.supabaseConfig = cfg;
+                const sb = window.nobleChain?.initSupabaseClient();
+                if(!sb) throw new Error('Supabase client unavailable (check library loaded)');
+                // test read from users table (limit 1)
+                const test = await sb.from('users').select('id').limit(1);
+                if(test.error) throw test.error;
+                // save to sessionStorage only after a successful test
+                try{ sessionStorage.setItem('noblechain_supabase', JSON.stringify(cfg)); }catch(e){ console.warn('sessionStorage error', e); }
+                updateDBStatus(true);
+                hideModal();
+                alert('Supabase config validated and saved to session.');
+            }catch(err){
+                console.error('Supabase validation failed', err);
+                // Clear any client created during validation to avoid multiple GoTrue instances
+                try{ if(window.nobleChain) { delete window.nobleChain.supabase; delete window.nobleChain.supabaseConfig; } }catch(e){}
+                updateDBStatus(false);
+                alert('Failed to validate Supabase credentials: ' + (err.message || JSON.stringify(err)));
+            }
         }
 
         function loadSupabaseConfig(){
@@ -1053,6 +1075,59 @@
         document.addEventListener('DOMContentLoaded', () => {
             updateDBStatus();
         });
+
+        // Sync actions
+        async function doPull(){
+            try{
+                const btn = document.getElementById('pullBtn'); btn.disabled = true; btn.textContent = 'Pulling...';
+                if(!window.nobleChain) throw new Error('App not initialized');
+                await window.nobleChain.initSupabaseClient();
+                const res = await window.nobleChain.fetchRemoteData();
+                updateLastSync();
+                showModal('Pull Complete', `<div class="p-3">Pulled changes: ${JSON.stringify(res)}</div>`);
+            }catch(err){ console.error(err); alert('Pull failed: '+(err.message||err)); }
+            finally{ const btn = document.getElementById('pullBtn'); if(btn){ btn.disabled=false; btn.textContent='Pull'; } }
+        }
+
+        async function doPush(){
+            try{
+                const btn = document.getElementById('pushBtn'); btn.disabled = true; btn.textContent = 'Pushing...';
+                if(!window.nobleChain) throw new Error('App not initialized');
+                await window.nobleChain.initSupabaseClient();
+                const res = await window.nobleChain.pushLocalData();
+                updateLastSync();
+                showModal('Push Complete', `<div class="p-3">Push result: ${JSON.stringify(res)}</div>`);
+            }catch(err){ console.error(err); alert('Push failed: '+(err.message||err)); }
+            finally{ const btn = document.getElementById('pushBtn'); if(btn){ btn.disabled=false; btn.textContent='Push'; } }
+        }
+
+        let _autoSyncInterval = null;
+        function toggleAutoSync(enabled){
+            try{
+                if(enabled){
+                    // start auto pull every 30 seconds and subscribe to realtime
+                    doPull().catch(()=>{});
+                    _autoSyncInterval = setInterval(()=>{ doPull().catch(()=>{}); }, 30000);
+                    if(window.nobleChain && typeof window.nobleChain.subscribeToChanges === 'function'){
+                        try{ window.nobleChain.subscribeToChanges(); }catch(e){ console.warn(e); }
+                    }
+                } else {
+                    if(_autoSyncInterval) { clearInterval(_autoSyncInterval); _autoSyncInterval = null; }
+                    if(window.nobleChain && typeof window.nobleChain.unsubscribeSupabaseSubscriptions === 'function'){
+                        try{ window.nobleChain.unsubscribeSupabaseSubscriptions(); }catch(e){ console.warn(e); }
+                    }
+                }
+            }catch(e){ console.warn('toggleAutoSync', e); }
+        }
+
+        function updateLastSync(ts){
+            try{
+                const el = document.getElementById('lastSync');
+                if(!el) return;
+                const when = ts ? new Date(ts) : new Date();
+                el.textContent = when.toLocaleString();
+            }catch(e){ console.warn(e); }
+        }
 
         function showModal(title, content) {
             document.getElementById('balanceModalContent').innerHTML = `
