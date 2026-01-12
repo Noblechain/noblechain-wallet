@@ -79,19 +79,19 @@ class NobleChain {
             'LTC':{ symbol:'LTC', name:'Litecoin', price:150, change:0.5, color:'#b8b8b8' },
             'ADA':{ symbol:'ADA', name:'Cardano', price:0.45, change:2.1, color:'#0033ad' },
             'SOL':{ symbol:'SOL', name:'Solana', price:100, change:3.4, color:'#00FFA3' },
-            'DOT':{ symbol:'DOT', name:'Polkadot', price:6.5, change:-1.0, color:'#e6007a' },
-            'XRP':{ symbol:'XRP', name:'XRP', price:0.6, change:-0.2, color:'#346aa9' },
-            'DOGE':{ symbol:'DOGE', name:'Dogecoin', price:0.12, change:5.6, color:'#ba9f33' },
-            'BNB':{ symbol:'BNB', name:'Binance Coin', price:350, change:0.8, color:'#f3ba2f' },
-            'SHIB':{ symbol:'SHIB', name:'Shiba Inu', price:0.00001, change:12.0, color:'#f97316' },
-            'AVAX':{ symbol:'AVAX', name:'Avalanche', price:25, change:-0.6, color:'#e84142' },
-            'MATIC':{ symbol:'MATIC', name:'Polygon', price:1.2, change:0.9, color:'#8247e5' },
-            'LINK':{ symbol:'LINK', name:'Chainlink', price:7.5, change:-0.3, color:'#2a5ada' },
-            'UNI':{ symbol:'UNI', name:'Uniswap', price:6.0, change:1.8, color:'#ff3e8d' },
-            // A few stocks for demo
-            'AAPL':{ symbol:'AAPL', name:'Apple Inc.', price:170, change:0.4, color:'#666666' },
-            'TSLA':{ symbol:'TSLA', name:'Tesla Inc.', price:230, change:-2.2, color:'#cc0000' },
-            'AMZN':{ symbol:'AMZN', name:'Amazon.com', price:130, change:0.7, color:'#ff9900' }
+              'DOT':{ symbol:'DOT', name:'Polkadot', price:6.5, change:-1.0, color:'#e6007a', logo:'resources/icons/DOT.svg' },
+              'XRP':{ symbol:'XRP', name:'XRP', price:0.6, change:-0.2, color:'#346aa9', logo:'resources/icons/XRP.svg' },
+              'DOGE':{ symbol:'DOGE', name:'Dogecoin', price:0.12, change:5.6, color:'#ba9f33', logo:'resources/icons/DOGE.svg' },
+              'BNB':{ symbol:'BNB', name:'Binance Coin', price:350, change:0.8, color:'#f3ba2f', logo:'resources/icons/BNB.svg' },
+              'SHIB':{ symbol:'SHIB', name:'Shiba Inu', price:0.00001, change:12.0, color:'#f97316', logo:'resources/icons/SHIB.svg' },
+              'AVAX':{ symbol:'AVAX', name:'Avalanche', price:25, change:-0.6, color:'#e84142', logo:'resources/icons/AVAX.svg' },
+              'MATIC':{ symbol:'MATIC', name:'Polygon', price:1.2, change:0.9, color:'#8247e5', logo:'resources/icons/MATIC.svg' },
+              'LINK':{ symbol:'LINK', name:'Chainlink', price:7.5, change:-0.3, color:'#2a5ada', logo:'resources/icons/LINK.svg' },
+              'UNI':{ symbol:'UNI', name:'Uniswap', price:6.0, change:1.8, color:'#ff3e8d', logo:'resources/icons/UNI.svg' },
+              // A few stocks for demo
+              'AAPL':{ symbol:'AAPL', name:'Apple Inc.', price:170, change:0.4, color:'#666666', logo:'resources/icons/AAPL.svg' },
+              'TSLA':{ symbol:'TSLA', name:'Tesla Inc.', price:230, change:-2.2, color:'#cc0000', logo:'resources/icons/TSLA.svg' },
+              'AMZN':{ symbol:'AMZN', name:'Amazon.com', price:130, change:0.7, color:'#ff9900', logo:'resources/icons/AMZN.svg' }
         };
 
         // Generate a small inline SVG logo for each entry (simple text-based mark)
