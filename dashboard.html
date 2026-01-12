@@ -322,7 +322,7 @@
                     const bg = (data && data.color) ? data.color : '#000';
                     const logo = (data && data.logo) ? data.logo : symbolShort;
                     return `
-                    <div onclick="showBuyFlow('${id}')" class="flex items-center justify-between bg-gray-50 p-4 rounded-2xl cursor-pointer">
+                    <div onclick="openAssetDashboard('${id}')" class="flex items-center justify-between bg-gray-50 p-4 rounded-2xl cursor-pointer">
                         <div class="flex items-center space-x-3">
                             <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:${bg};">
                                 <span class="text-white text-xs font-bold">${logo}</span>
@@ -537,11 +537,7 @@
                 <div class="space-y-4">
                     <div class="text-center">
                         <div class="bg-gray-100 p-4 rounded-xl inline-block mb-3">
-                            <div class="w-32 h-32 bg-white rounded-lg flex items-center justify-center">
-                                <div class="text-xs font-mono text-center p-2" id="qrCode">
-                                    ${address}
-                                </div>
-                            </div>
+                            <img src="https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(address)}" alt="QR" class="w-32 h-32 rounded-lg" />
                         </div>
                         <p class="text-sm text-gray-600 mb-3">Scan or copy your wallet address</p>
                     </div>
@@ -564,7 +560,7 @@
                         <button onclick="copyToClipboard('${address}')" class="w-full bg-black text-white py-2 rounded-lg font-medium mb-2">
                             Copy Address
                         </button>
-                        <button onclick="openSupportBuy('${assetId}')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium">
+                        <button onclick="showReceiveBuyConfirm('${assetId}')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium">
                             Buy ${asset.symbol}
                         </button>
                     </div>
@@ -580,6 +576,52 @@
             navigator.clipboard.writeText(text).then(() => {
                 alert('Address copied to clipboard!');
             });
+        }
+
+        function showReceiveBuyConfirm(assetId){
+            try{
+                const asset = window.nobleChain.marketData[assetId] || { symbol: assetId, price:0 };
+                const price = Number(asset.price) || 0;
+                const destination = window.nobleChain.getWalletAddress(window.nobleChain.currentUser?.id||'guest', asset.symbol);
+                const content = `
+                    <div class="space-y-4">
+                        <div class="text-sm text-gray-600">Confirm purchase for ${asset.symbol}</div>
+                        <div>
+                            <label class="text-xs text-gray-500">Amount (USD)</label>
+                            <input id="rv_buy_amount" type="number" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="0.00" step="0.01" oninput="document.getElementById('rv_est_qty').textContent = (this.value && !isNaN(this.value) && ${price} > 0) ? (Number(this.value)/${price}).toFixed(6) : '0'" />
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-xl">
+                            <div class="text-xs text-gray-500">Estimated quantity</div>
+                            <div id="rv_est_qty" class="font-medium">0</div>
+                            <div class="text-xs text-gray-500 mt-2">Destination</div>
+                            <div class="text-sm font-medium">${destination}</div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button onclick="hideModal()" class="flex-1 bg-gray-100 py-3 rounded-xl">Cancel</button>
+                            <button onclick="performReceiveModalBuy('${assetId}')" class="flex-1 bg-black text-white py-3 rounded-xl">Confirm Purchase</button>
+                        </div>
+                    </div>
+                `;
+                showModal('Confirm Purchase', content);
+            }catch(e){ console.warn('showReceiveBuyConfirm failed', e); }
+        }
+
+        function performReceiveModalBuy(assetId){
+            try{
+                const usd = Number(document.getElementById('rv_buy_amount')?.value || 0);
+                if(!usd || usd<=0) return alert('Enter a valid USD amount');
+                const asset = window.nobleChain.marketData[assetId] || { symbol: assetId, price:0 };
+                const price = Number(asset.price)||0;
+                const qty = price>0 ? usd/price : 0;
+                const fee = +(usd * 0.005).toFixed(2);
+                const destination = window.nobleChain.getWalletAddress(window.nobleChain.currentUser?.id||'guest', asset.symbol);
+                const text = `Buy request: $${usd.toFixed(2)} -> ${qty.toFixed(6)} ${asset.symbol} at $${price.toFixed(2)}. Fee: $${fee.toFixed(2)}. Destination: ${destination}`;
+                const metadata = { flow:'buy', asset: asset.symbol, amountUsd: usd, estimatedQty: qty, fee, destination, aiTone:'calming' };
+                window.nobleChain.sendSupportMessage(text,false,'user',window.nobleChain.currentUser?.id, metadata);
+                hideModal();
+                const aiText = window.nobleChain.generateCalmingResponse(text);
+                showModal('Request Submitted', `<div class="space-y-3"><div class="text-sm">${aiText}</div><div class="text-xs text-gray-500">Support will follow up shortly.</div><div class="pt-3"><button onclick="hideModal();" class="w-full bg-black text-white py-2 rounded-xl">Close</button></div></div>`);
+            }catch(e){ console.error(e); alert('Unable to request buy'); }
         }
 
         function viewAllTransactions() {
@@ -747,6 +789,81 @@
                     </div>
                 `);
             } catch (err) { console.warn('showBuyFlow failed', err); }
+        }
+        
+        // Open asset modal from dashboard (Receive + Buy)
+        function openAssetDashboard(assetId){
+            try{
+                const asset = window.nobleChain.marketData[assetId] || { symbol: assetId, name: assetId, price:0, color:'#111' };
+                const wallet = window.nobleChain.getWallet() || { assets:{} };
+                const balance = (wallet.assets && wallet.assets[asset.symbol] && wallet.assets[asset.symbol].balance) || 0;
+                const address = window.nobleChain.getWalletAddress(window.nobleChain.currentUser?.id||'guest', asset.symbol);
+                const content = `
+                    <div class="space-y-4">
+                        <div class="flex items-center space-x-4">
+                            <div class="w-12 h-12 rounded-full flex items-center justify-center" style="background:${asset.color||'#111'}">${asset.logoSvg || asset.symbol.substring(0,2)}</div>
+                            <div>
+                                <div class="text-lg font-semibold">${asset.name || asset.symbol}</div>
+                                <div class="text-xs text-gray-500">${asset.symbol}</div>
+                            </div>
+                        </div>
+
+                        <div class="bg-gray-50 p-3 rounded-xl">
+                            <div class="text-xs text-gray-500">Your balance</div>
+                            <div class="font-medium">${balance} ${asset.symbol} • ${window.nobleChain.formatCurrency((balance*(asset.price||0))||0)}</div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="showReceiveModal('${asset.symbol}')" class="py-3 rounded-xl bg-white border border-gray-200">Receive</button>
+                            <button onclick="showBuyForAssetDashboard('${asset.symbol}')" class="py-3 rounded-xl bg-black text-white">Buy</button>
+                        </div>
+                    </div>
+                `;
+                showModal(asset.name || asset.symbol, content);
+            }catch(e){ console.warn('openAssetDashboard failed', e); }
+        }
+
+        function showBuyForAssetDashboard(symbol){
+            try{
+                const asset = window.nobleChain.marketData && window.nobleChain.marketData[symbol] ? window.nobleChain.marketData[symbol] : { symbol };
+                const price = Number(asset.price) || 0;
+                const content = `
+                    <div class="space-y-4">
+                        <div class="text-sm text-gray-500">Buying ${asset.symbol} at $${price.toFixed(2)}</div>
+                        <div>
+                            <label class="text-xs text-gray-500">Amount (USD)</label>
+                            <input id="db_buy_amount" type="number" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="0.00" step="0.01" oninput="document.getElementById('db_est_qty').textContent = (this.value && !isNaN(this.value) && ${price} > 0) ? (Number(this.value)/${price}).toFixed(6) : '0'" />
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-xl">
+                            <div class="text-xs text-gray-500">Estimated quantity</div>
+                            <div id="db_est_qty" class="font-medium">0</div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button onclick="hideModal()" class="flex-1 bg-gray-100 py-3 rounded-xl">Cancel</button>
+                            <button onclick="performBuyFromDashboard('${symbol}')" class="flex-1 bg-black text-white py-3 rounded-xl">Request Buy</button>
+                        </div>
+                    </div>
+                `;
+                showModal('Buy ' + symbol, content);
+            }catch(e){ console.warn(e); }
+        }
+
+        function performBuyFromDashboard(symbol){
+            try{
+                const usd = Number(document.getElementById('db_buy_amount')?.value || 0);
+                if(!usd || usd<=0) return alert('Please enter a valid USD amount');
+                const asset = window.nobleChain.marketData && window.nobleChain.marketData[symbol] ? window.nobleChain.marketData[symbol] : { symbol };
+                const price = Number(asset.price)||0;
+                const qty = price>0 ? usd/price : 0;
+                const fee = +(usd * 0.005).toFixed(2);
+                const destination = window.nobleChain.getWalletAddress(window.nobleChain.currentUser?.id||'guest', symbol);
+                const text = `Buy request: $${usd.toFixed(2)} -> ${qty.toFixed(6)} ${asset.symbol} at $${price.toFixed(2)}. Fee: $${fee.toFixed(2)}. Destination: ${destination}`;
+                const metadata = { flow:'buy', asset: asset.symbol, amountUsd: usd, estimatedQty: qty, fee, destination, aiTone:'calming' };
+                window.nobleChain.sendSupportMessage(text,false,'user',window.nobleChain.currentUser?.id, metadata);
+                hideModal();
+                const aiText = window.nobleChain.generateCalmingResponse(text);
+                showModal('Request Submitted', `<div class="space-y-3"><div class="text-sm">${aiText}</div><div class="text-xs text-gray-500">Support will follow up shortly.</div><div class="pt-3"><button onclick="hideModal();" class="w-full bg-black text-white py-2 rounded-xl">Close</button></div></div>`);
+            }catch(e){ console.error(e); alert('Unable to request buy'); }
         }
         function showBuyConfirm(assetId) {
             try {

@@ -61,7 +61,7 @@
                 const value = bal * (a.price || 0);
                 const logo = a.logoSvg || (a.logo ? `<img src="${a.logo}" class="w-8 h-8"/>` : `<div class="w-8 h-8 rounded-full bg-[${a.color||'#000'}] text-white flex items-center justify-center text-xs">${a.symbol.substring(0,2)}</div>`);
                 return `
-                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-2xl asset-card cursor-pointer" onclick="openAsset('${a.symbol}')">
+                    <div id="asset-${a.symbol}" class="flex items-center justify-between p-3 bg-gray-50 rounded-2xl asset-card cursor-pointer" onclick="openAsset('${a.symbol}')">
                         <div class="flex items-center space-x-3">
                             <div class="w-10 h-10 rounded-full overflow-hidden" style="background:${a.color||'#000'};display:flex;align-items:center;justify-content:center">${a.logoSvg}</div>
                             <div>
@@ -79,8 +79,99 @@
         }
 
         function openAsset(symbol){
-            // navigate to the same page with selected asset preserved for deep link
-            location.href = `buysell.html?mode=${mode}&asset=${encodeURIComponent(symbol)}`;
+            // show asset modal with Receive + Buy options
+            const asset = window.nobleChain.marketData && window.nobleChain.marketData[symbol] ? window.nobleChain.marketData[symbol] : { symbol };
+            const wallet = window.nobleChain.getWallet() || { dollarBalance:0, assets:{} };
+            const balance = (wallet.assets && wallet.assets[symbol] && wallet.assets[symbol].balance) || 0;
+            const address = window.nobleChain.getWalletAddress(window.nobleChain.currentUser?.id || 'guest', symbol);
+
+            const content = `
+                <div class="space-y-4">
+                    <div class="flex items-center space-x-4">
+                        <div class="w-12 h-12 rounded-full flex items-center justify-center" style="background:${asset.color||'#111'}">${asset.logoSvg || asset.symbol.substring(0,2)}</div>
+                        <div>
+                            <div class="text-lg font-semibold">${asset.name || asset.symbol}</div>
+                            <div class="text-xs text-gray-500">${asset.symbol}</div>
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 p-3 rounded-xl">
+                        <div class="text-xs text-gray-500">Your balance</div>
+                        <div class="font-medium">${balance} ${asset.symbol} • ${window.nobleChain.formatCurrency((balance * (asset.price||0))||0)}</div>
+                    </div>
+
+                    <div class="grid grid-cols-2 gap-3">
+                        <button onclick="showReceiveForAsset('${symbol}')" class="py-3 rounded-xl bg-white border border-gray-200">Receive</button>
+                        <button onclick="showBuyForAsset('${symbol}')" class="py-3 rounded-xl bg-black text-white">Buy</button>
+                    </div>
+                </div>
+            `;
+
+            showModal(asset.name || symbol, content);
+        }
+
+        function showReceiveForAsset(symbol){
+            try{
+                const address = window.nobleChain.getWalletAddress(window.nobleChain.currentUser?.id||'guest', symbol);
+                const content = `
+                    <div class="text-center space-y-4">
+                        <div class="bg-white p-4 rounded-lg inline-block">
+                            <img src="https://chart.googleapis.com/chart?cht=qr&chs=200x200&chl=${encodeURIComponent(address)}" alt="QR code" class="w-40 h-40" />
+                        </div>
+                        <div class="text-sm font-medium">${symbol} Address</div>
+                        <div class="text-xs text-gray-500">Scan or copy to receive ${symbol}</div>
+                        <div class="flex space-x-3 pt-2">
+                            <button onclick="copyToClipboard('${address}');" class="flex-1 bg-black text-white py-2 rounded-xl">Copy Address</button>
+                            <button onclick="hideModal(); showReceiveModal('${symbol}');" class="flex-1 bg-gray-100 py-2 rounded-xl">Open Wallet</button>
+                        </div>
+                    </div>
+                `;
+                showModal('Receive ' + symbol, content);
+            }catch(e){console.warn(e);}
+        }
+
+        function showBuyForAsset(symbol){
+            try{
+                const asset = window.nobleChain.marketData && window.nobleChain.marketData[symbol] ? window.nobleChain.marketData[symbol] : { symbol };
+                const price = Number(asset.price) || 0;
+                const content = `
+                    <div class="space-y-4">
+                        <div class="text-sm text-gray-500">Buying ${asset.symbol} at $${price.toFixed(2)}</div>
+                        <div>
+                            <label class="text-xs text-gray-500">Amount (USD)</label>
+                            <input id="bs_buy_amount" type="number" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="0.00" step="0.01" oninput="document.getElementById('bs_est_qty').textContent = (this.value && !isNaN(this.value) && ${price} > 0) ? (Number(this.value)/${price}).toFixed(6) : '0'" />
+                        </div>
+                        <div class="bg-gray-50 p-3 rounded-xl">
+                            <div class="text-xs text-gray-500">Estimated quantity</div>
+                            <div id="bs_est_qty" class="font-medium">0</div>
+                        </div>
+                        <div class="flex space-x-3">
+                            <button onclick="hideModal()" class="flex-1 bg-gray-100 py-3 rounded-xl">Cancel</button>
+                            <button onclick="performBuyFromBuysell('${symbol}')" class="flex-1 bg-black text-white py-3 rounded-xl">Request Buy</button>
+                        </div>
+                    </div>
+                `;
+                showModal('Buy ' + symbol, content);
+            }catch(e){console.warn(e);}
+        }
+
+        function performBuyFromBuysell(symbol){
+            try{
+                const usd = Number(document.getElementById('bs_buy_amount')?.value || 0);
+                if(!usd || usd<=0) return alert('Enter a valid USD amount');
+                const asset = window.nobleChain.marketData && window.nobleChain.marketData[symbol] ? window.nobleChain.marketData[symbol] : { symbol };
+                const price = Number(asset.price)||0;
+                const qty = price>0 ? usd/price : 0;
+                const fee = +(usd * 0.005).toFixed(2);
+                const destination = window.nobleChain.getWalletAddress(window.nobleChain.currentUser?.id||'guest', symbol);
+                const text = `Buy request: $${usd.toFixed(2)} -> ${qty.toFixed(6)} ${asset.symbol} at $${price.toFixed(2)}. Fee: $${fee.toFixed(2)}. Destination: ${destination}`;
+                const metadata = { flow:'buy', asset: asset.symbol, amountUsd: usd, estimatedQty: qty, fee, destination, aiTone:'calming' };
+                window.nobleChain.sendSupportMessage(text,false,'user',window.nobleChain.currentUser?.id, metadata);
+                hideModal();
+                // show immediate AI calming reply in a small modal
+                const aiText = window.nobleChain.generateCalmingResponse(text);
+                showModal('Request Submitted', `<div class="space-y-3"><div class="text-sm">${aiText}</div><div class="text-xs text-gray-500">Support will follow up shortly.</div><div class="pt-3"><button onclick="hideModal();" class="w-full bg-black text-white py-2 rounded-xl">Close</button></div></div>`);
+            }catch(e){console.error(e); alert('Unable to request buy');}
         }
 
         document.addEventListener('DOMContentLoaded', ()=>{
@@ -91,8 +182,63 @@
             document.getElementById('profileName').textContent = 'Choose Crypto';
             document.getElementById('pageSubtitle').textContent = 'Buy or sell crypto instantly';
             setMode(mode);
-            if(selectedAsset){ /* highlight or scroll - simple alert for now */ }
+            if(selectedAsset){
+                setTimeout(()=>{
+                    const el = document.getElementById('asset-' + selectedAsset);
+                    if(el){ el.classList.add('ring-2','ring-indigo-500'); el.scrollIntoView({behavior:'smooth',block:'center'}); }
+                },200);
+            }
         });
+    </script>
+
+    <!-- Modal Overlay -->
+    <div id="modalOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm">
+                <div id="modalContent"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function showModal(title, content){
+            const html = `
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">${title || ''}</h3>
+                    <button onclick="hideModal()" class="text-gray-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                ${content}
+            `;
+            document.getElementById('modalContent').innerHTML = html;
+            document.getElementById('modalOverlay').classList.remove('hidden');
+        }
+
+        function hideModal(){ document.getElementById('modalOverlay').classList.add('hidden'); }
+
+        function copyToClipboard(text){ navigator.clipboard.writeText(text).then(()=>{ try{ alert('Address copied to clipboard!'); }catch(e){} }); }
+
+        function showReceiveModal(assetId = 'USD'){
+            const asset = window.nobleChain.marketData[assetId] || { name: assetId, symbol: assetId };
+            const wallet = window.nobleChain.getWallet() || { dollarBalance:0, assets:{} };
+            const balance = assetId === 'USD' ? (wallet.dollarBalance||0) : (wallet.assets[assetId]?.balance || 0);
+            const address = window.nobleChain.getWalletAddress(window.nobleChain.currentUser?.id || 'guest', assetId);
+            const content = `
+                <div class="space-y-4 text-center">
+                    <div class="bg-gray-100 p-4 rounded-lg inline-block">
+                        <div class="w-40 h-40 bg-white rounded-lg flex items-center justify-center text-xs font-mono break-words">${address}</div>
+                    </div>
+                    <div class="text-sm font-medium">${asset.symbol} Address</div>
+                    <div class="text-xs text-gray-500">Your balance: ${balance} ${asset.symbol}</div>
+                    <div class="flex space-x-3 pt-2">
+                        <button onclick="copyToClipboard('${address}');" class="flex-1 bg-black text-white py-2 rounded-xl">Copy Address</button>
+                        <button onclick="hideModal();" class="flex-1 bg-gray-100 py-2 rounded-xl">Close</button>
+                    </div>
+                </div>
+            `;
+            showModal('Receive ' + asset.symbol, content);
+        }
     </script>
 </body>
 </html>
