@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noble Chain - Secure Digital Wallet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Load main application shim (replaces missing nobleChain.js/admin.js) -->
+    <script src="main.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .hero-bg { background: linear-gradient(135deg, #000000 0%, #1a1a1a 100%); }
+        .hidden { display: none !important; }
+        .slide-in { animation: slideIn 0.3s ease-out; }
+        @keyframes slideIn {
+            from { transform: translateX(100%); opacity: 0; }
+            to { transform: translateX(0); opacity: 1; }
+        }
+    </style>
+</head>
+<body class="bg-white text-black min-h-screen">
+
+<!-- Landing Section -->
+<section id="landingSection" class="hero-bg min-h-screen flex flex-col justify-center items-center text-white px-4">
+    <div class="text-center max-w-sm mx-auto">
+        <div id="logoIcon" class="w-32 h-32 mx-auto mb-8 bg-white bg-opacity-10 rounded-full flex items-center justify-center cursor-pointer">
+            <svg class="w-16 h-16 text-white" fill="currentColor" viewBox="0 0 20 20">
+                <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"></path>
+            </svg>
+        </div>
+        <h1 class="text-4xl font-bold mb-4">Noble Chain</h1>
+        <p class="text-gray-300 text-lg mb-8">Secure Digital Wallet Platform</p>
+        <div class="space-y-4">
+            <button onclick="showSection('signupSection')" class="w-full bg-white text-black py-4 rounded-2xl font-semibold text-lg">
+                Create Wallet
+            </button>
+            <button onclick="showSection('loginSection')" class="w-full bg-transparent border-2 border-white text-white py-4 rounded-2xl font-semibold text-lg">
+                Sign In
+            </button>
+        </div>
+    </div>
+</section>
+
+<!-- Signup Section -->
+<section id="signupSection" class="hidden min-h-screen bg-white px-4 py-8">
+    <div class="max-w-sm mx-auto">
+        <div class="flex items-center mb-6">
+            <button onclick="showSection('landingSection')" class="p-2 -ml-2">
+                Back
+            </button>
+            <h1 class="text-2xl font-bold ml-4">Create Account</h1>
+        </div>
+        <form id="signupForm" class="space-y-4">
+            <input type="email" id="signupEmail" placeholder="Email" class="w-full p-4 border rounded-2xl">
+            <input type="text" id="signupUsername" placeholder="Username" class="w-full p-4 border rounded-2xl">
+            <input type="password" id="signupPassword" placeholder="Password" class="w-full p-4 border rounded-2xl">
+            <button type="submit" class="w-full bg-black text-white py-4 rounded-2xl font-semibold text-lg">Continue</button>
+        </form>
+    </div>
+</section>
+
+<!-- Login Section -->
+<section id="loginSection" class="hidden min-h-screen bg-white px-4 py-8">
+    <div class="max-w-sm mx-auto">
+        <div class="flex items-center mb-6">
+            <button onclick="showSection('landingSection')" class="p-2 -ml-2">Back</button>
+            <h1 class="text-2xl font-bold ml-4">Welcome Back</h1>
+        </div>
+        <form id="loginForm" class="space-y-4">
+            <input type="email" id="loginEmail" placeholder="Email" class="w-full p-4 border rounded-2xl">
+            <input type="password" id="loginPassword" placeholder="Password" class="w-full p-4 border rounded-2xl">
+            <button type="submit" class="w-full bg-black text-white py-4 rounded-2xl font-semibold text-lg">Sign In</button>
+        </form>
+    </div>
+</section>
+
+<!-- Recovery / Seed Phrase Section -->
+<section id="recoverySection" class="hidden min-h-screen bg-white px-4 py-8">
+    <div class="max-w-md mx-auto">
+        <h1 class="text-2xl font-bold mb-4">Your Recovery Phrase</h1>
+        <p class="text-sm text-gray-600 mb-4">Write these words down in order and store them securely. Anyone with this phrase can access your wallet.</p>
+        <div id="recoveryPhrase" class="select-all p-6 mb-4 bg-gray-100 rounded-lg break-words text-lg"></div>
+        <div class="flex space-x-2">
+            <button id="copyPhrase" class="flex-1 bg-gray-800 text-white py-3 rounded-2xl">Copy</button>
+            <button id="confirmSaved" class="flex-1 bg-black text-white py-3 rounded-2xl">I Saved It</button>
+        </div>
+    </div>
+</section>
+
+<!-- Confirm Seed Section -->
+<section id="confirmSeedSection" class="hidden min-h-screen bg-white px-4 py-8">
+    <div class="max-w-md mx-auto">
+        <h1 class="text-2xl font-bold mb-4">Confirm Recovery Phrase</h1>
+        <p class="text-sm text-gray-600 mb-4">To confirm you saved your recovery phrase, enter the words requested below.</p>
+        <form id="confirmSeedForm" class="space-y-4">
+            <div id="seedPrompts" class="space-y-3"></div>
+            <button type="submit" class="w-full bg-black text-white py-3 rounded-2xl">Confirm</button>
+        </form>
+    </div>
+</section>
+
+<script src="https://cdn.jsdelivr.net/npm/bip39@3.0.4/browser/bip39.min.js"></script>
+<script type="module">
+    import { supabase, isAnonKeyConfigured } from './supabase-client.js'
+
+  // Minimal nobleChain object (kept for compatibility)
+  window.nobleChain = {
+      adminUsers: [{ username: "admin", password: "noblechain2024" }],
+      login: function(email, password){ alert('Demo login not implemented.'); },
+  };
+
+  // Admin login function (standalone)
+  function showAdminLogin() {
+      const username = prompt('Enter admin username:');
+      if (username === 'admin') {
+          const password = prompt('Enter admin password:');
+          if (password === 'noblechain2024') {
+              localStorage.setItem('noblechain_admin_session', JSON.stringify({ adminId: 'admin', loginTime: Date.now() }));
+              alert('Admin login successful!');
+              window.location.href = 'admin.html';
+          } else {
+              alert('Invalid admin credentials');
+          }
+      } else {
+          alert('Invalid admin credentials');
+      }
+  }
+
+  // Triple-click on logo to open admin login
+  const logo = document.getElementById('logoIcon');
+  let clickCount = 0;
+  logo.addEventListener('click', () => {
+      clickCount++;
+      setTimeout(() => {
+          if (clickCount >= 3) {
+              showAdminLogin();
+              clickCount = 0;
+          }
+      }, 500);
+      setTimeout(() => clickCount = 0, 1000);
+  });
+
+  // Section switching
+  function showSection(sectionId) {
+      // hide all sections, then show the requested one
+      document.querySelectorAll('section').forEach(s => s.classList.add('hidden'));
+      const el = document.getElementById(sectionId);
+      if (el) el.classList.remove('hidden');
+  }
+
+  // Expose to gl obal scope so inline `onclick` attributes work
+  window.showSection = showSection;
+
+  // Signup handler using Supabase
+  async function handleSignup(email, password, username) {
+      if (!isAnonKeyConfigured()) {
+          alert('Signup blocked: Supabase anon key is not configured. Please add your Supabase anon/public key to index.html.');
+          return;
+      }
+
+      try {
+          const { data, error } = await supabase.auth.signUp({
+              email,
+              password,
+              options: { data: { username } }
+          })
+
+          if (error) {
+              alert('Signup error: ' + error.message)
+              return
+          }
+
+          // If Supabase returns a user/session, consider signup successful
+          // Ensure a local session so the dashboard can read the username
+          const createdUserId = data?.user?.id || (Date.now().toString(36));
+          const createdUsername = username || data?.user?.user_metadata?.username || data?.user?.email || 'User';
+          window.nobleChain = window.nobleChain || {};
+          window.nobleChain.currentUser = { id: 'supabase_' + createdUserId, username: createdUsername };
+          // Persist user into local noblechain storage so admin/dashboard see the new account
+          try {
+              const users = JSON.parse(localStorage.getItem('noblechain_users') || '[]');
+              const userIdKey = window.nobleChain.currentUser.id;
+              if (!users.find(u => u.id === userIdKey)) {
+                  users.push({ id: userIdKey, email, username: createdUsername, createdAt: Date.now(), lastLogin: Date.now() });
+                  localStorage.setItem('noblechain_users', JSON.stringify(users));
+              }
+              const wallets = JSON.parse(localStorage.getItem('noblechain_wallets') || '{}');
+              if (!wallets[userIdKey]) {
+                  wallets[userIdKey] = { userId: userIdKey, dollarBalance: 0, assets: {} };
+                  localStorage.setItem('noblechain_wallets', JSON.stringify(wallets));
+              }
+          } catch (e) { console.warn('Failed to persist local demo user', e); }
+          localStorage.setItem('noblechain_session', JSON.stringify({ userId: window.nobleChain.currentUser.id, timestamp: Date.now() }));
+          localStorage.setItem('noblechain_current_username', createdUsername);
+
+          // Generate and show a recovery phrase screen instead of immediately redirecting
+          let mnemonic = null;
+          // Try global bip39
+          try {
+              if (window.bip39 && typeof window.bip39.generateMnemonic === 'function') {
+                  mnemonic = window.bip39.generateMnemonic();
+              } else if (window.bip39 && window.bip39.default && typeof window.bip39.default.generateMnemonic === 'function') {
+                  mnemonic = window.bip39.default.generateMnemonic();
+              }
+          } catch (e) {
+              console.warn('bip39 global generate failed', e);
+          }
+
+          // Try dynamic ESM import if still missing
+          if (!mnemonic) {
+              try {
+                  const mod = await import('https://cdn.jsdelivr.net/npm/bip39@3.0.4/+esm');
+                  if (mod && typeof mod.generateMnemonic === 'function') {
+                      mnemonic = mod.generateMnemonic();
+                  } else if (mod && mod.default && typeof mod.default.generateMnemonic === 'function') {
+                      mnemonic = mod.default.generateMnemonic();
+                  }
+              } catch (e) {
+                  console.warn('Dynamic bip39 import failed', e);
+              }
+          }
+
+          // Fallback - simple random word generator (guarantees a value)
+          if (!mnemonic) {
+              const fallbackWords = ['apple','banana','orange','table','river','mountain','silver','gold','ocean','forest','rocket','planet','window','mirror','cloud','stone','shadow','ember','spark','anchor','bridge','candle','canvas','circle','comet','dawn','dusk','ember','flame','globe'];
+              const pick = () => fallbackWords[Math.floor(Math.random() * fallbackWords.length)];
+              mnemonic = Array.from({length:12}, pick).join(' ');
+          }
+
+          document.getElementById('recoveryPhrase').textContent = mnemonic;
+          showSection('recoverySection');
+      } catch (err) {
+          alert('Signup failed: ' + err.message)
+      }
+  }
+
+  // Login handler using Supabase
+  async function handleLogin(email, password) {
+      if (!isAnonKeyConfigured()) {
+          alert('Login blocked: Supabase anon key is not configured. Please add your Supabase anon/public key to index.html.');
+          return;
+      }
+
+      try {
+          const { data, error } = await supabase.auth.signInWithPassword({ email, password })
+
+          if (error) {
+              alert('Login error: ' + error.message)
+              return
+          }
+
+          // Set local session so the dashboard UI can display the username
+          const loggedInUser = data?.user;
+          const loginUsername = loggedInUser?.user_metadata?.username || loggedInUser?.email || 'User';
+          window.nobleChain = window.nobleChain || {};
+          window.nobleChain.currentUser = { id: 'supabase_' + (loggedInUser?.id || Date.now().toString(36)), username: loginUsername };
+          // Ensure this user exists in local noblechain storage for dashboard/admin compatibility
+          try {
+              const users = JSON.parse(localStorage.getItem('noblechain_users') || '[]');
+              const userIdKey = window.nobleChain.currentUser.id;
+              if (!users.find(u => u.id === userIdKey)) {
+                  users.push({ id: userIdKey, email: loggedInUser?.email || '', username: loginUsername, createdAt: Date.now(), lastLogin: Date.now() });
+                  localStorage.setItem('noblechain_users', JSON.stringify(users));
+              }
+              const wallets = JSON.parse(localStorage.getItem('noblechain_wallets') || '{}');
+              if (!wallets[userIdKey]) {
+                  wallets[userIdKey] = { userId: userIdKey, dollarBalance: 0, assets: {} };
+                  localStorage.setItem('noblechain_wallets', JSON.stringify(wallets));
+              }
+          } catch (e) { console.warn('Failed to persist local demo login user', e); }
+          localStorage.setItem('noblechain_session', JSON.stringify({ userId: window.nobleChain.currentUser.id, timestamp: Date.now() }));
+          localStorage.setItem('noblechain_current_username', loginUsername);
+
+          alert('Login successful. Redirecting to dashboard...')
+          window.location.href = 'dashboard.html'
+      } catch (err) {
+          alert('Login failed: ' + err.message)
+      }
+  }
+
+  // Wire existing forms to Supabase handlers
+  document.getElementById('signupForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = document.getElementById('signupEmail').value.trim();
+      const password = document.getElementById('signupPassword').value;
+      const username = document.getElementById('signupUsername').value.trim();
+
+      if (!email || !password) {
+          alert('Please provide an email and password.');
+          return;
+      }
+
+      handleSignup(email, password, username);
+  });
+
+  document.getElementById('loginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const email = document.getElementById('loginEmail').value.trim();
+      const password = document.getElementById('loginPassword').value;
+
+      if (!email || !password) {
+          alert('Please provide an email and password.');
+          return;
+      }
+
+      handleLogin(email, password);
+  });
+
+  // Recovery phrase buttons
+  document.getElementById('copyPhrase').addEventListener('click', async () => {
+      const phrase = document.getElementById('recoveryPhrase').textContent;
+      try {
+          await navigator.clipboard.writeText(phrase);
+          alert('Recovery phrase copied to clipboard');
+      } catch (err) {
+          alert('Copy failed: ' + err.message);
+      }
+  });
+
+  document.getElementById('confirmSaved').addEventListener('click', () => {
+      // Build confirm prompts from the displayed mnemonic and show confirm screen
+      const phrase = (document.getElementById('recoveryPhrase').textContent || '').trim().split(/\s+/);
+      if (!phrase || phrase.length < 12) {
+          alert('Recovery phrase not found or invalid.');
+          return;
+      }
+
+      // pick 3 unique positions
+      const indices = new Set();
+      while (indices.size < 3) {
+          indices.add(Math.floor(Math.random() * phrase.length));
+      }
+      const idxArray = Array.from(indices).sort((a,b) => a-b);
+
+      const prompts = document.getElementById('seedPrompts');
+      prompts.innerHTML = '';
+      idxArray.forEach((i) => {
+          const label = document.createElement('label');
+          label.className = 'block text-sm font-medium';
+          label.textContent = `Word #${i+1}`;
+          const input = document.createElement('input');
+          input.type = 'text';
+          input.className = 'w-full p-3 border rounded-2xl';
+          input.dataset.index = i;
+          prompts.appendChild(label);
+          prompts.appendChild(input);
+      });
+
+      // Store the phrase temporarily to validate later
+      sessionStorage.setItem('noblechain_temp_phrase', phrase.join(' '));
+      sessionStorage.setItem('noblechain_temp_indices', JSON.stringify(idxArray));
+
+      showSection('confirmSeedSection');
+  });
+
+  // Handle confirmation form submission
+  document.getElementById('confirmSeedForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const phrase = (sessionStorage.getItem('noblechain_temp_phrase') || '').trim().split(/\s+/);
+      const indices = JSON.parse(sessionStorage.getItem('noblechain_temp_indices') || '[]');
+      if (!phrase || phrase.length < 12 || indices.length === 0) {
+          alert('No phrase to validate.');
+          return;
+      }
+
+      let allMatch = true;
+      indices.forEach((idx) => {
+          const input = document.querySelector(`input[data-index='${idx}']`);
+          const val = (input && input.value || '').trim().toLowerCase();
+          const expected = (phrase[idx] || '').toLowerCase();
+          if (val !== expected) allMatch = false;
+      });
+
+      if (!allMatch) {
+          alert('One or more words are incorrect. Please try again.');
+          return;
+      }
+
+      // success
+      localStorage.setItem('noblechain_seed_saved', 'true');
+      // clean up temp
+      sessionStorage.removeItem('noblechain_temp_phrase');
+      sessionStorage.removeItem('noblechain_temp_indices');
+
+      // add a welcome notification to localStorage
+      try {
+          const username = localStorage.getItem('noblechain_current_username') || (window.nobleChain && window.nobleChain.currentUser && window.nobleChain.currentUser.username) || 'User';
+          const note = { id: 'note_' + Date.now().toString(36), title: 'Welcome to Noble Chain', message: `Welcome ${username}! Your wallet is ready. Keep your recovery phrase safe.`, type: 'welcome', timestamp: Date.now(), read: false };
+          const notes = JSON.parse(localStorage.getItem('noblechain_notifications') || '[]');
+          notes.unshift(note);
+          localStorage.setItem('noblechain_notifications', JSON.stringify(notes));
+      } catch (err) { console.warn('Failed to store welcome notification', err); }
+
+      // show congratulations modal before redirect
+      const modal = document.getElementById('congratsModal');
+      if (modal) {
+          modal.classList.remove('hidden');
+      } else {
+          window.location.href = 'dashboard.html';
+      }
+  });
+
+    // Congratulations modal handlers
+    // Add modal HTML to the page
+    const congratsHtml = `
+        <div id="congratsModal" class="fixed inset-0 bg-black bg-opacity-70 z-50 hidden flex items-center justify-center px-4">
+            <div class="bg-gradient-to-br from-yellow-50 to-white shadow-2xl rounded-3xl p-6 max-w-md text-center border border-yellow-100">
+                <div class="inline-block bg-yellow-200 p-4 rounded-full mb-4 shadow-lg">
+                    <svg class="w-8 h-8 text-yellow-700" fill="currentColor" viewBox="0 0 20 20"><path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.286 3.97a1 1 0 00.95.69h4.178c.969 0 1.371 1.24.588 1.81l-3.385 2.46a1 1 0 00-.364 1.118l1.287 3.97c.3.922-.755 1.688-1.538 1.118l-3.385-2.46a1 1 0 00-1.176 0l-3.385 2.46c-.783.57-1.838-.196-1.538-1.118l1.287-3.97a1 1 0 00-.364-1.118L2.047 9.397c-.783-.57-.38-1.81.588-1.81h4.178a1 1 0 00.95-.69l1.286-3.97z"/></svg>
+                </div>
+                <h2 class="text-2xl font-extrabold mb-2">Congratulations, Royal!</h2>
+                <p class="text-gray-700 mb-3">Your wallet is live — built for royalty. Keep your recovery phrase secure; it is the key to your kingdom.</p>
+                <p class="text-sm text-gray-500 mb-6">A welcome message has been added to your Notifications.</p>
+                <div class="flex space-x-2">
+                    <button id="congratsClose" class="flex-1 bg-white border border-gray-200 py-3 rounded-2xl font-semibold">Close</button>
+                    <button id="congratsContinue" class="flex-1 bg-yellow-600 text-white py-3 rounded-2xl font-bold">Proceed to Dashboard</button>
+                </div>
+            </div>
+        </div>`;
+
+    document.body.insertAdjacentHTML('beforeend', congratsHtml);
+    document.getElementById('congratsClose').addEventListener('click', () => {
+            document.getElementById('congratsModal').classList.add('hidden');
+    });
+    document.getElementById('congratsContinue').addEventListener('click', () => {
+            document.getElementById('congratsModal').classList.add('hidden');
+            window.location.href = 'dashboard.html';
+    });
+</script>
+
+</body>
+</html>
+

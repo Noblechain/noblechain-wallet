@@ -1,0 +1,967 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noble Chain - Admin Console</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Using CDN for rapid local/dev preview. Replace with built CSS for production. -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .card-shadow { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .tab-btn { transition: all 0.2s ease; }
+        .tab-btn.active { background: #000000; color: #ffffff; }
+        .balance-input { transition: all 0.2s ease; }
+        .balance-input:focus { border-color: #000000; box-shadow: 0 0 0 3px rgba(0,0,0,0.1); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-50 text-black min-h-screen overflow-x-hidden">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-100 px-4 py-3 sticky top-0 z-40">
+        <div class="flex items-center justify-between max-w-6xl mx-auto">
+            <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 bg-black rounded-full flex items-center justify-center">
+                    <svg class="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                        <path fill-rule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clip-rule="evenodd"></path>
+                    </svg>
+                </div>
+                <h1 class="text-xl font-semibold">Admin Console</h1>
+            </div>
+            <div class="flex items-center space-x-3">
+                <div class="text-sm text-gray-600">
+                    Logged in as: <span class="font-semibold">Admin</span>
+                </div>
+                <button onclick="adminConsole && adminConsole.syncUsersFromUrl ? adminConsole.syncUsersFromUrl() : alert('Admin console not ready')" class="bg-blue-600 text-white px-3 py-2 rounded-lg text-sm font-medium">
+                    Sync Users
+                </button>
+                <button onclick="logoutAdmin()" class="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium">
+                    Logout
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-6xl mx-auto px-4 py-6">
+        <!-- Tab Navigation -->
+        <div class="bg-white rounded-2xl p-4 mb-6 card-shadow">
+            <div class="flex space-x-2 overflow-x-auto">
+                <button onclick="switchTab(event,'users')" class="tab-btn active px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap">
+                    Users
+                </button>
+                <button onclick="switchTab(event,'transactions')" class="tab-btn px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap bg-gray-100">
+                    Transactions
+                </button>
+                <button onclick="switchTab(event,'support')" class="tab-btn px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap bg-gray-100">
+                    Support Chats
+                </button>
+                <button onclick="switchTab(event,'logs')" class="tab-btn px-4 py-2 rounded-xl text-sm font-medium whitespace-nowrap bg-gray-100">
+                    Admin Logs
+                </button>
+            </div>
+        </div>
+
+        <!-- Login Activity Tab -->
+        <div id="loginsTab" class="tab-content hidden">
+            <div class="bg-white rounded-2xl p-6 card-shadow">
+                <h2 class="text-lg font-semibold mb-4">User Login Activity</h2>
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-gray-100">
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">User</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Email</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Login Time</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Device</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="loginsTableBody">
+                            <!-- Login activity will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="loginsCardsContainer" class="md:hidden space-y-4">
+                    <!-- Login activity cards for mobile will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div id="usersTab" class="tab-content">
+            <div class="bg-white rounded-2xl p-6 card-shadow mb-6">
+                <h2 class="text-lg font-semibold mb-4">Platform Statistics</h2>
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="text-2xl font-bold" id="totalUsers">0</div>
+                        <div class="text-sm text-gray-600">Total Users</div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="text-2xl font-bold" id="totalTransactions">0</div>
+                        <div class="text-sm text-gray-600">Total Transactions</div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="text-2xl font-bold" id="totalVolume">$0</div>
+                        <div class="text-sm text-gray-600">Total Volume</div>
+                    </div>
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="text-2xl font-bold" id="activeChats">0</div>
+                        <div class="text-sm text-gray-600">Active Chats</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl p-6 card-shadow">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold">User Management</h2>
+                    <input type="text" id="userSearch" placeholder="Search users..." 
+                           class="px-3 py-2 border border-gray-200 rounded-lg text-sm">
+                </div>
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-gray-100">
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">User</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Email</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Balance</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Assets</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTableBody">
+                            <!-- Users will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="usersCardsContainer" class="md:hidden space-y-4">
+                    <!-- User cards for mobile will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Transactions Tab -->
+        <div id="transactionsTab" class="tab-content hidden">
+            <div class="bg-white rounded-2xl p-6 card-shadow">
+                <h2 class="text-lg font-semibold mb-4">All Transactions</h2>
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-gray-100">
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">User</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Type</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Asset</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Amount</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Date</th>
+                            </tr>
+                        </thead>
+                        <tbody id="transactionsTableBody">
+                            <!-- Transactions will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="transactionsCardsContainer" class="md:hidden space-y-4">
+                    <!-- Transaction cards for mobile will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Support Tab -->
+        <div id="supportTab" class="tab-content hidden">
+            <div class="bg-white rounded-2xl p-6 card-shadow">
+                <h2 class="text-lg font-semibold mb-4">Support Chats</h2>
+                <div id="supportChats">
+                    <!-- Support chats will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Logs Tab -->
+        <div id="logsTab" class="tab-content hidden">
+            <div class="bg-white rounded-2xl p-6 card-shadow">
+                <h2 class="text-lg font-semibold mb-4">Admin Action Logs</h2>
+                <div class="hidden md:block overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="border-b border-gray-100">
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Action</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Details</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">Timestamp</th>
+                                <th class="text-left py-3 px-2 text-sm font-medium text-gray-600">IP</th>
+                            </tr>
+                        </thead>
+                        <tbody id="logsTableBody">
+                            <!-- Logs will be populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+                <div id="logsCardsContainer" class="md:hidden space-y-4">
+                    <!-- Admin logs cards for mobile will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Balance Edit Modal -->
+    <div id="balanceModal" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm">
+                <div id="balanceModalContent">
+                    <!-- Modal content will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+    <script>
+        class AdminConsole {
+            constructor() {
+                this.currentTab = 'users';
+                this.selectedUser = null;
+                this.init();
+            }
+
+            init() {
+                console.log('AdminConsole.init() starting');
+                // Check if admin is logged in
+                const adminSession = localStorage.getItem('noblechain_admin_session');
+                if (!adminSession) {
+                    alert('Admin access required');
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                // Parse and validate admin session
+                try {
+                    const sessionData = JSON.parse(adminSession);
+                    if (!sessionData.adminId || !sessionData.loginTime) {
+                        throw new Error('Invalid admin session');
+                    }
+                    
+                    // Check if session is still valid (24 hours)
+                    if (Date.now() - sessionData.loginTime > 86400000) {
+                        localStorage.removeItem('noblechain_admin_session');
+                        alert('Admin session expired');
+                        window.location.href = 'index.html';
+                        return;
+                    }
+                } catch (error) {
+                    localStorage.removeItem('noblechain_admin_session');
+                    alert('Invalid admin session');
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                this.updateStats();
+                this.renderUsers();
+                this.bindEvents();
+            }
+
+            updateStats() {
+                const users = window.nobleChain.getAllUsers();
+                const transactions = window.nobleChain.getAllTransactions();
+                const supportChats = window.nobleChain.getSupportChats();
+                
+                // Calculate total volume
+                let totalVolume = 0;
+                transactions.forEach(tx => {
+                    if (tx.type === 'buy' || tx.type === 'sell') {
+                        totalVolume += tx.amount * (window.nobleChain.marketData[tx.asset]?.price || 0);
+                    }
+                });
+
+                document.getElementById('totalUsers').textContent = users.length;
+                document.getElementById('totalTransactions').textContent = transactions.length;
+                document.getElementById('totalVolume').textContent = window.nobleChain.formatCurrency(totalVolume);
+                document.getElementById('activeChats').textContent = new Set(supportChats.map(chat => chat.userId)).size;
+            }
+
+            renderUsers() {
+                const container = document.getElementById('usersTableBody');
+                const users = window.nobleChain.getAllUsers();
+                
+                if (users.length === 0) {
+                    container.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center py-8 text-gray-500">
+                                No users found
+                            </td>
+                        </tr>
+                    `;
+                    const usersCards = document.getElementById('usersCardsContainer');
+                    if (usersCards) {
+                        usersCards.innerHTML = `
+                            <div class="text-center py-8 text-gray-500">
+                                No users found
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                container.innerHTML = users.map(user => {
+                    const wallet = window.nobleChain.getWallet(user.id);
+                    const totalBalance = window.nobleChain.getTotalBalance(user.id);
+                    const assetCount = Object.keys(wallet.assets).length;
+                    
+                    return `
+                        <tr class="border-b border-gray-50">
+                            <td class="py-3 px-2">
+                                <div class="font-semibold text-sm">${user.username}</div>
+                                <div class="text-xs text-gray-500">Joined ${new Date(user.createdAt).toLocaleDateString()}</div>
+                            </td>
+                            <td class="py-3 px-2 text-sm">${user.email}</td>
+                            <td class="py-3 px-2 text-sm font-semibold">${window.nobleChain.formatCurrency(totalBalance)}</td>
+                            <td class="py-3 px-2 text-sm">${assetCount} assets</td>
+                            <td class="py-3 px-2">
+                                <div class="flex space-x-2">
+                                    <button onclick="adminConsole.editBalance('${user.id}')" 
+                                            class="text-blue-600 text-sm font-medium">
+                                        Edit Balance
+                                    </button>
+                                    <button onclick="adminConsole.viewUserDetails('${user.id}')" 
+                                            class="text-gray-600 text-sm font-medium">
+                                        View
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+
+                // Build mobile cards for users (visible under md)
+                const usersCards = document.getElementById('usersCardsContainer');
+                if (usersCards) {
+                    usersCards.innerHTML = users.map(user => {
+                        const wallet = window.nobleChain.getWallet(user.id);
+                        const totalBalance = window.nobleChain.getTotalBalance(user.id);
+                        const assetCount = Object.keys(wallet.assets).length;
+
+                        return `
+                            <div class="bg-white p-4 rounded-xl card-shadow">
+                                <div class="flex items-start justify-between mb-2">
+                                    <div>
+                                        <div class="font-semibold text-sm">${user.username}</div>
+                                        <div class="text-xs text-gray-500">Joined ${new Date(user.createdAt).toLocaleDateString()}</div>
+                                        <div class="text-sm text-gray-600">${user.email}</div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-sm font-semibold">${window.nobleChain.formatCurrency(totalBalance)}</div>
+                                        <div class="text-xs text-gray-500">${assetCount} assets</div>
+                                    </div>
+                                </div>
+                                <div class="flex space-x-3 mt-3">
+                                    <button onclick="adminConsole.editBalance('${user.id}')" class="text-blue-600 text-sm font-medium">
+                                        Edit Balance
+                                    </button>
+                                    <button onclick="adminConsole.viewUserDetails('${user.id}')" class="text-gray-600 text-sm font-medium">
+                                        View
+                                    </button>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+            }
+
+            renderTransactions() {
+                const container = document.getElementById('transactionsTableBody');
+                const transactions = window.nobleChain.getAllTransactions();
+                
+                if (transactions.length === 0) {
+                    container.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center py-8 text-gray-500">
+                                No transactions found
+                            </td>
+                        </tr>
+                    `;
+                    const txCards = document.getElementById('transactionsCardsContainer');
+                    if (txCards) {
+                        txCards.innerHTML = `
+                            <div class="text-center py-8 text-gray-500">
+                                No transactions found
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                container.innerHTML = transactions
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .slice(0, 50)
+                    .map(tx => {
+                        const user = window.nobleChain.users.find(u => u.id === tx.userId);
+                        const username = user ? user.username : 'Unknown';
+                        
+                        return `
+                            <tr class="border-b border-gray-50">
+                                <td class="py-3 px-2 text-sm">${username}</td>
+                                <td class="py-3 px-2 text-sm capitalize">${tx.type.replace('_', ' ')}</td>
+                                <td class="py-3 px-2 text-sm">${tx.asset}</td>
+                                <td class="py-3 px-2 text-sm">${window.nobleChain.formatNumber(tx.amount)}</td>
+                                <td class="py-3 px-2 text-sm">${new Date(tx.timestamp).toLocaleDateString()}</td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                // Build mobile cards for transactions
+                const txCards = document.getElementById('transactionsCardsContainer');
+                if (txCards) {
+                    txCards.innerHTML = transactions
+                        .sort((a, b) => b.timestamp - a.timestamp)
+                        .slice(0, 50)
+                        .map(tx => {
+                            const user = window.nobleChain.users.find(u => u.id === tx.userId);
+                            const username = user ? user.username : 'Unknown';
+
+                            return `
+                                <div class="bg-white p-4 rounded-xl card-shadow">
+                                    <div class="font-semibold text-sm mb-1">${username}</div>
+                                    <div class="text-sm text-gray-600">Type: ${tx.type.replace('_', ' ')}</div>
+                                    <div class="text-sm text-gray-600">Asset: ${tx.asset}</div>
+                                    <div class="text-sm text-gray-600">Amount: ${window.nobleChain.formatNumber(tx.amount)}</div>
+                                    <div class="text-xs text-gray-500 mt-2">${new Date(tx.timestamp).toLocaleDateString()}</div>
+                                </div>
+                            `;
+                        }).join('');
+                }
+            }
+
+            renderSupportChats() {
+                const container = document.getElementById('supportChats');
+                const supportChats = window.nobleChain.getSupportChats();
+                const userChats = {};
+                
+                // Group chats by user
+                supportChats.forEach(chat => {
+                    if (!userChats[chat.userId]) {
+                        userChats[chat.userId] = [];
+                    }
+                    userChats[chat.userId].push(chat);
+                });
+                
+                const userIds = Object.keys(userChats);
+                
+                if (userIds.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-8 text-gray-500">
+                            <p>No support chats found</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = userIds.map(userId => {
+                    const user = window.nobleChain.users.find(u => u.id === userId);
+                    const username = user ? user.username : 'Unknown User';
+                    const chats = userChats[userId];
+                    const lastMessage = chats[chats.length - 1];
+                    const unreadCount = chats.filter(chat => chat.senderType === 'user' && !chat.isAdmin).length;
+                    
+                    return `
+                        <div class="bg-gray-50 p-4 rounded-xl mb-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <div class="font-semibold">${username}</div>
+                                <div class="text-xs text-gray-500">
+                                    ${new Date(lastMessage.timestamp).toLocaleDateString()}
+                                </div>
+                            </div>
+                            <div class="text-sm text-gray-600 mb-3">
+                                ${lastMessage.message.substring(0, 100)}${lastMessage.message.length > 100 ? '...' : ''}
+                            </div>
+                            <div class="flex items-center justify-between">
+                                <div class="text-xs text-gray-500">
+                                    ${chats.length} messages
+                                </div>
+                                <div class="flex items-center space-x-2">
+                                    ${unreadCount > 0 ? `
+                                        <span class="bg-red-500 text-white text-xs px-2 py-1 rounded-full">
+                                            ${unreadCount} new
+                                        </span>
+                                    ` : ''}
+                                    <button onclick="adminConsole.viewChat('${userId}')" 
+                                            class="text-blue-600 text-sm font-medium">
+                                        View Chat
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            renderLoginActivity() {
+                const container = document.getElementById('loginsTableBody');
+                const loginHistory = window.nobleChain.loginHistory;
+                
+                if (loginHistory.length === 0) {
+                    container.innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center py-8 text-gray-500">
+                                No login activity found
+                            </td>
+                        </tr>
+                    `;
+                    const loginsCards = document.getElementById('loginsCardsContainer');
+                    if (loginsCards) {
+                        loginsCards.innerHTML = `
+                            <div class="text-center py-8 text-gray-500">
+                                No login activity found
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                container.innerHTML = loginHistory
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .slice(0, 100)
+                    .map(record => {
+                        const user = window.nobleChain.users.find(u => u.id === record.userId);
+                        const username = user ? user.username : 'Unknown';
+                        const email = user ? user.email : 'Unknown';
+                        
+                        return `
+                            <tr class="border-b border-gray-50">
+                                <td class="py-3 px-2 text-sm">${username}</td>
+                                <td class="py-3 px-2 text-sm">${email}</td>
+                                <td class="py-3 px-2 text-sm">${new Date(record.timestamp).toLocaleString()}</td>
+                                <td class="py-3 px-2 text-sm">${record.deviceInfo}</td>
+                                <td class="py-3 px-2">
+                                    <span class="px-2 py-1 rounded-full text-xs ${record.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                        ${record.success ? 'Success' : 'Failed'}
+                                    </span>
+                                </td>
+                            </tr>
+                        `;
+                    }).join('');
+
+                // Build mobile cards for login activity
+                const loginsCards = document.getElementById('loginsCardsContainer');
+                if (loginsCards) {
+                    loginsCards.innerHTML = loginHistory
+                        .sort((a, b) => b.timestamp - a.timestamp)
+                        .slice(0, 100)
+                        .map(record => {
+                            const user = window.nobleChain.users.find(u => u.id === record.userId);
+                            const username = user ? user.username : 'Unknown';
+                            const email = user ? user.email : 'Unknown';
+
+                            return `
+                                <div class="bg-white p-4 rounded-xl card-shadow">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <div>
+                                            <div class="font-semibold text-sm">${username}</div>
+                                            <div class="text-xs text-gray-500">${email}</div>
+                                        </div>
+                                        <div class="text-xs text-gray-500">${new Date(record.timestamp).toLocaleString()}</div>
+                                    </div>
+                                    <div class="text-sm text-gray-600">Device: ${record.deviceInfo}</div>
+                                    <div class="mt-2">
+                                        <span class="px-2 py-1 rounded-full text-xs ${record.success ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                                            ${record.success ? 'Success' : 'Failed'}
+                                        </span>
+                                    </div>
+                                </div>
+                            `;
+                        }).join('');
+                }
+            }
+
+            renderAdminLogs() {
+                const container = document.getElementById('logsTableBody');
+                const logs = JSON.parse(localStorage.getItem('noblechain_admin_logs') || '[]');
+                
+                if (logs.length === 0) {
+                    container.innerHTML = `
+                        <tr>
+                            <td colspan="4" class="text-center py-8 text-gray-500">
+                                No admin logs found
+                            </td>
+                        </tr>
+                    `;
+                    const logsCards = document.getElementById('logsCardsContainer');
+                    if (logsCards) {
+                        logsCards.innerHTML = `
+                            <div class="text-center py-8 text-gray-500">
+                                No admin logs found
+                            </div>
+                        `;
+                    }
+                    return;
+                }
+
+                container.innerHTML = logs
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .slice(0, 50)
+                    .map(log => `
+                        <tr class="border-b border-gray-50">
+                            <td class="py-3 px-2 text-sm capitalize">${log.action.replace('_', ' ')}</td>
+                            <td class="py-3 px-2 text-sm">
+                                ${log.details.username ? `User: ${log.details.username}<br>` : ''}
+                                ${log.details.userId ? `User ID: ${log.details.userId}<br>` : ''}
+                                Success: ${log.details.success ? 'Yes' : 'No'}
+                            </td>
+                            <td class="py-3 px-2 text-sm">${new Date(log.timestamp).toLocaleString()}</td>
+                            <td class="py-3 px-2 text-sm">${log.details.ipAddress}</td>
+                        </tr>
+                    `).join('');
+
+                // Build mobile cards for admin logs
+                const logsCards = document.getElementById('logsCardsContainer');
+                if (logsCards) {
+                    logsCards.innerHTML = logs
+                        .sort((a, b) => b.timestamp - a.timestamp)
+                        .slice(0, 50)
+                        .map(log => `
+                            <div class="bg-white p-4 rounded-xl card-shadow">
+                                <div class="font-semibold text-sm mb-1">${log.action.replace('_', ' ')}</div>
+                                <div class="text-sm text-gray-600 mb-2">
+                                    ${log.details.username ? `User: ${log.details.username}<br>` : ''}
+                                    ${log.details.userId ? `User ID: ${log.details.userId}<br>` : ''}
+                                    Success: ${log.details.success ? 'Yes' : 'No'}
+                                </div>
+                                <div class="text-xs text-gray-500">${new Date(log.timestamp).toLocaleString()}</div>
+                                <div class="text-xs text-gray-500">IP: ${log.details.ipAddress}</div>
+                            </div>
+                        `).join('');
+                }
+            }
+
+            editBalance(userId) {
+                const user = window.nobleChain.users.find(u => u.id === userId);
+                const wallet = window.nobleChain.getWallet(userId);
+                
+                if (!user || !wallet) {
+                    alert('User not found');
+                    return;
+                }
+
+                const assetOptions = ['USD', ...Object.keys(wallet.assets), ...Object.keys(window.nobleChain.marketData)]
+                    .filter((asset, index, arr) => arr.indexOf(asset) === index)
+                    .map(asset => `<option value="${asset}">${asset}</option>`)
+                    .join('');
+
+                const currentBalance = wallet.dollarBalance;
+                
+                showModal('Edit User Balance', `
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 p-4 rounded-xl">
+                            <div class="text-sm font-medium mb-1">User: ${user.username}</div>
+                            <div class="text-sm text-gray-600">Email: ${user.email}</div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Asset</label>
+                            <select id="editAsset" class="w-full p-3 border border-gray-200 rounded-xl">
+                                ${assetOptions}
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">New Balance</label>
+                            <input type="number" id="newBalance" class="w-full p-3 border border-gray-200 rounded-xl" 
+                                   placeholder="0.00" step="0.01" value="${currentBalance}">
+                        </div>
+                        
+                        <div>
+                            <label class="block text-sm font-medium mb-2">Reason (optional)</label>
+                            <input type="text" id="editReason" class="w-full p-3 border border-gray-200 rounded-xl" 
+                                   placeholder="Enter reason for balance adjustment">
+                        </div>
+                        
+                        <div class="flex space-x-3">
+                            <button onclick="hideModal()" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">
+                                Cancel
+                            </button>
+                            <button onclick="adminConsole.confirmBalanceEdit('${userId}')" 
+                                    class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">
+                                Update Balance
+                            </button>
+                        </div>
+                    </div>
+                `);
+            }
+
+            confirmBalanceEdit(userId) {
+                const asset = document.getElementById('editAsset').value;
+                const newBalance = parseFloat(document.getElementById('newBalance').value);
+                const reason = document.getElementById('editReason').value;
+                
+                if (isNaN(newBalance) || newBalance < 0) {
+                    alert('Please enter a valid balance');
+                    return;
+                }
+
+                const wallet = window.nobleChain.getWallet(userId);
+                const oldBalance = asset === 'USD' ? wallet.dollarBalance : (wallet.assets[asset]?.balance || 0);
+                const adjustment = newBalance - oldBalance;
+
+                // Update balance
+                if (asset === 'USD') {
+                    wallet.dollarBalance = newBalance;
+                } else {
+                    if (!wallet.assets[asset]) {
+                        wallet.assets[asset] = { balance: 0, averageCost: 0 };
+                    }
+                    wallet.assets[asset].balance = newBalance;
+                }
+                
+                window.nobleChain.saveWallets();
+
+                // Create admin adjustment transaction
+                const defaultReason = (adjustment > 0) ? 'DEPOSIT' : (adjustment < 0 ? 'WITHDRAWAL' : 'ADJUSTMENT');
+                const tx = window.nobleChain.createTransaction('admin_adjustment', asset, Math.abs(adjustment), reason || defaultReason, userId, {
+                    previousBalance: oldBalance,
+                    newBalance: newBalance,
+                    adjustment: adjustment,
+                    adminId: 'admin_console',
+                    reason: reason || defaultReason
+                });
+
+                // Log admin action
+                this.logAdminAction('balance_adjustment', {
+                    userId: userId,
+                    asset: asset,
+                    oldBalance: oldBalance,
+                    newBalance: newBalance,
+                    adjustment: adjustment,
+                    reason: reason,
+                    timestamp: Date.now()
+                });
+
+                hideModal();
+                alert(`Balance updated successfully. Adjustment of ${window.nobleChain.formatNumber(Math.abs(adjustment))} ${asset} has been logged.`);
+                
+                this.updateStats();
+                this.renderUsers();
+            }
+
+            viewUserDetails(userId) {
+                const user = window.nobleChain.users.find(u => u.id === userId);
+                const wallet = window.nobleChain.getWallet(userId);
+                
+                showModal('User Details', `
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 p-4 rounded-xl">
+                            <h3 class="font-semibold mb-2">Account Information</h3>
+                            <div class="space-y-1 text-sm">
+                                <div><span class="text-gray-600">Username:</span> ${user.username}</div>
+                                <div><span class="text-gray-600">Email:</span> ${user.email}</div>
+                                <div><span class="text-gray-600">Joined:</span> ${new Date(user.createdAt).toLocaleDateString()}</div>
+                                <div><span class="text-gray-600">Last Login:</span> ${user.lastLogin ? new Date(user.lastLogin).toLocaleDateString() : 'Never'}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 p-4 rounded-xl">
+                            <h3 class="font-semibold mb-2">Wallet Balance</h3>
+                            <div class="space-y-1 text-sm">
+                                <div><span class="text-gray-600">USD Balance:</span> ${window.nobleChain.formatCurrency(wallet.dollarBalance)}</div>
+                                <div><span class="text-gray-600">Total Value:</span> ${window.nobleChain.formatCurrency(window.nobleChain.getTotalBalance(userId))}</div>
+                                <div><span class="text-gray-600">Assets:</span> ${Object.keys(wallet.assets).length}</div>
+                            </div>
+                        </div>
+                        
+                        <div class="bg-gray-50 p-4 rounded-xl">
+                            <h3 class="font-semibold mb-2">Assets</h3>
+                            <div class="space-y-1 text-sm">
+                                ${Object.entries(wallet.assets).map(([assetId, data]) => {
+                                    const marketInfo = window.nobleChain.marketData[assetId];
+                                    const value = data.balance * (marketInfo?.price || 0);
+                                    return `<div><span class="text-gray-600">${assetId}:</span> ${window.nobleChain.formatNumber(data.balance)} (${window.nobleChain.formatCurrency(value)})</div>`;
+                                }).join('')}
+                            </div>
+                        </div>
+                        
+                        <button onclick="hideModal()" class="w-full bg-black text-white py-3 rounded-xl font-semibold">
+                            Close
+                        </button>
+                    </div>
+                `);
+            }
+
+            viewChat(userId) {
+                const user = window.nobleChain.users.find(u => u.id === userId);
+                const username = user ? user.username : 'Unknown User';
+                const chats = window.nobleChain.getSupportChats(userId);
+                
+                const chatMessages = chats.map(chat => {
+                    const isUser = chat.senderType === 'user';
+                    const messageClass = `message-${chat.senderType}`;
+                    const alignmentClass = isUser ? 'ml-auto' : 'mr-auto';
+                    const senderLabel = chat.senderType === 'ai' ? 'AI Assistant' : 
+                                       chat.senderType === 'admin' ? 'Support Agent' : 'User';
+                    
+                    return `
+                        <div class="mb-4 ${isUser ? 'text-right' : 'text-left'}">
+                            <div class="inline-block max-w-xs">
+                                <div class="text-xs text-gray-500 mb-1 ${isUser ? 'text-right' : 'text-left'}">
+                                    ${senderLabel}
+                                </div>
+                                <div class="inline-block px-4 py-3 rounded-2xl ${messageClass} ${alignmentClass}">
+                                    ${chat.message}
+                                </div>
+                                <div class="text-xs text-gray-400 mt-1 ${isUser ? 'text-right' : 'text-left'}">
+                                    ${new Date(chat.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+                
+                showModal(`Chat with ${username}`, `
+                    <div class="space-y-4">
+                        <div class="bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
+                            ${chatMessages}
+                        </div>
+                        <button onclick="hideModal()" class="w-full bg-black text-white py-3 rounded-xl font-semibold">
+                            Close
+                        </button>
+                    </div>
+                `);
+            }
+
+            logAdminAction(action, details) {
+                const adminLogs = JSON.parse(localStorage.getItem('noblechain_admin_logs') || '[]');
+                adminLogs.push({
+                    id: Date.now().toString(36) + Math.random().toString(36).substr(2),
+                    action: action,
+                    details: details,
+                    timestamp: Date.now(),
+                    adminId: 'admin_console'
+                });
+                
+                // Keep only last 1000 admin logs
+                if (adminLogs.length > 1000) {
+                    adminLogs.splice(0, adminLogs.length - 1000);
+                }
+                
+                localStorage.setItem('noblechain_admin_logs', JSON.stringify(adminLogs));
+            }
+
+            bindEvents() {
+                console.log('AdminConsole.bindEvents()');
+                // User search
+                document.getElementById('userSearch').addEventListener('input', (e) => {
+                    // Simple search implementation
+                    const query = e.target.value.toLowerCase();
+                    const rows = document.querySelectorAll('#usersTableBody tr');
+                    rows.forEach(row => {
+                        const text = row.textContent.toLowerCase();
+                        row.style.display = text.includes(query) ? '' : 'none';
+                    });
+
+                    // Also filter mobile user cards
+                    const cards = document.querySelectorAll('#usersCardsContainer > div');
+                    cards.forEach(card => {
+                        const text = card.textContent.toLowerCase();
+                        card.style.display = text.includes(query) ? '' : 'none';
+                    });
+                });
+            }
+
+                async syncUsersFromUrl() {
+                    const url = prompt('Enter JSON URL to import users from (expects an array of user objects):');
+                    if (!url) return;
+                    try {
+                        const resp = await fetch(url);
+                        if (!resp.ok) throw new Error('Fetch failed: ' + resp.statusText);
+                        const data = await resp.json();
+                        if (!Array.isArray(data)) throw new Error('Expected an array of users');
+                        let added = 0;
+                        data.forEach(u => {
+                            if (!u || !u.id) return;
+                            const exists = window.nobleChain.users.find(x => x.id === u.id || x.email === u.email || x.username === u.username);
+                            if (!exists) {
+                                window.nobleChain.users.push(u);
+                                window.nobleChain.wallets[u.id] = window.nobleChain.wallets[u.id] || { userId: u.id, dollarBalance: 0, assets: {} };
+                                added++;
+                            }
+                        });
+                        window.nobleChain.saveUsers();
+                        window.nobleChain.saveWallets();
+                        this.renderUsers();
+                        alert(`Imported ${added} users`);
+                    } catch (err) {
+                        console.error(err);
+                        alert('Failed to import users: ' + (err.message || err));
+                    }
+                }
+        }
+
+        // Global functions
+        function switchTab(evt, tabName) {
+            console.log('switchTab called', tabName, evt);
+            adminConsole.currentTab = tabName;
+
+            // Update tab buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+                btn.classList.add('bg-gray-100');
+            });
+            if (evt && evt.currentTarget) {
+                evt.currentTarget.classList.add('active');
+                evt.currentTarget.classList.remove('bg-gray-100');
+            } else if (evt && evt.target) {
+                evt.target.classList.add('active');
+                evt.target.classList.remove('bg-gray-100');
+            }
+            
+            // Show/hide tab content
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.add('hidden');
+            });
+            document.getElementById(tabName + 'Tab').classList.remove('hidden');
+            
+            // Render appropriate content
+            switch(tabName) {
+                case 'users':
+                    adminConsole.renderUsers();
+                    break;
+                case 'transactions':
+                    adminConsole.renderTransactions();
+                    break;
+                case 'support':
+                    adminConsole.renderSupportChats();
+                    break;
+                case 'logs':
+                    adminConsole.renderAdminLogs();
+                    break;
+            }
+        }
+
+        function logoutAdmin() {
+            localStorage.removeItem('noblechain_admin_session');
+            window.location.href = 'index.html';
+        }
+
+        function showModal(title, content) {
+            document.getElementById('balanceModalContent').innerHTML = `
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">${title}</h3>
+                    <button onclick="hideModal()" class="text-gray-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                ${content}
+            `;
+            document.getElementById('balanceModal').classList.remove('hidden');
+        }
+
+        function hideModal() {
+            document.getElementById('balanceModal').classList.add('hidden');
+        }
+
+        // Initialize Admin Console (exposed on window for inline handlers)
+        window.adminConsole = null;
+        document.addEventListener('DOMContentLoaded', () => {
+            window.adminConsole = new AdminConsole();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noble Chain - My Wallet</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .card-shadow { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .balance-card { background: #000000; color: #ffffff; }
+        .action-btn { transition: all 0.2s ease; }
+        .action-btn:active { transform: scale(0.98); }
+        .asset-card { transition: all 0.2s ease; }
+        .asset-card:hover { transform: translateY(-2px); box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+        .search-input { transition: all 0.2s ease; }
+        .search-input:focus { border-color: #000000; box-shadow: 0 0 0 3px rgba(0,0,0,0.1); }
+        .hidden { display: none !important; }
+    </style>
+</head>
+<body class="bg-white text-black min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-100 px-4 py-3 sticky top-0 z-40">
+        <div class="flex items-center justify-between max-w-md mx-auto">
+            <div class="flex items-center space-x-3">
+                <button onclick="goBack()" class="p-2 -ml-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path>
+                    </svg>
+                </button>
+                <h1 class="text-xl font-semibold">My Wallet</h1>
+            </div>
+            <button onclick="showAddAsset()" class="p-2">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                </svg>
+            </button>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-md mx-auto px-4 pb-20">
+        <!-- Crypto Balance Card -->
+        <div class="balance-card rounded-2xl p-6 mt-6 card-shadow">
+            <div class="text-gray-300 text-xs font-medium mb-2">Total Crypto Balance</div>
+            <div class="text-3xl font-bold mb-1" id="cryptoBalance">$0.00</div>
+            <div class="text-gray-400 text-xs">Across all digital assets</div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="mt-6">
+            <div class="relative">
+                <input type="text" id="searchInput" 
+                       class="w-full p-4 pl-12 border border-gray-200 rounded-2xl search-input" 
+                       placeholder="Search assets...">
+                <svg class="w-5 h-5 text-gray-400 absolute left-4 top-1/2 transform -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                </svg>
+            </div>
+        </div>
+
+        <!-- Asset List -->
+        <div class="mt-6">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">Your Assets</h3>
+                <button onclick="toggleAssetView()" class="text-sm text-gray-500">
+                    <span id="viewToggleText">All Assets</span>
+                </button>
+            </div>
+            <div class="space-y-3" id="assetList">
+                <!-- Assets will be populated by JavaScript -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-2 z-50">
+        <div class="flex justify-around max-w-md mx-auto">
+            <a href="dashboard.html" class="flex flex-col items-center py-2 text-gray-400">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+                </svg>
+                <span class="text-xs font-medium">Home</span>
+            </a>
+            <a href="dashboard.html#buy" class="flex flex-col items-center py-2 text-gray-400">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="text-xs font-medium">Buy/Sell</span>
+            </a>
+            <a href="swap.html" class="flex flex-col items-center py-2 text-gray-400">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="text-xs font-medium">Swap</span>
+            </a>
+            <a href="transactions.html" class="flex flex-col items-center py-2 text-gray-400">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="text-xs font-medium">Transactions</span>
+            </a>
+            <a href="wallet.html" class="flex flex-col items-center py-2 text-black">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"></path>
+                </svg>
+                <span class="text-xs font-medium">Wallet</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Modals -->
+    <div id="modalOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm">
+                <div id="modalContent">
+                    <!-- Modal content will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+    <script>
+        class WalletPage {
+            constructor() {
+                this.showAllAssets = false;
+                this.searchQuery = '';
+                this.init();
+            }
+
+            init() {
+                if (!window.nobleChain.currentUser) {
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                this.updateWallet();
+                this.renderAssets();
+                this.bindEvents();
+                
+                // Update every 5 seconds
+                setInterval(() => this.updateWallet(), 5000);
+            }
+
+            updateWallet() {
+                const wallet = window.nobleChain.getWallet();
+                const cryptoBalance = this.calculateCryptoBalance();
+                
+                document.getElementById('cryptoBalance').textContent = 
+                    window.nobleChain.formatCurrency(cryptoBalance);
+            }
+
+            calculateCryptoBalance() {
+                const wallet = window.nobleChain.getWallet();
+                let total = 0;
+                
+                Object.entries(wallet.assets).forEach(([assetId, data]) => {
+                    const price = window.nobleChain.marketData[assetId]?.price || 0;
+                    total += data.balance * price;
+                });
+                
+                return total;
+            }
+
+            renderAssets() {
+                const container = document.getElementById('assetList');
+                const wallet = window.nobleChain.getWallet();
+                const marketData = window.nobleChain.marketData;
+                
+                let assets = Object.entries(wallet.assets);
+                
+                // Filter by search query
+                if (this.searchQuery) {
+                    assets = assets.filter(([assetId]) => {
+                        const data = marketData[assetId];
+                        return data && (
+                            data.name.toLowerCase().includes(this.searchQuery.toLowerCase()) ||
+                            data.symbol.toLowerCase().includes(this.searchQuery.toLowerCase())
+                        );
+                    });
+                }
+                
+                // Show only owned assets or all available
+                if (!this.showAllAssets) {
+                    assets = assets.filter(([assetId, data]) => data.balance > 0);
+                } else {
+                    // Add available assets that user doesn't own yet
+                    Object.entries(marketData).forEach(([assetId, data]) => {
+                        if (!wallet.assets[assetId]) {
+                            assets.push([assetId, { balance: 0, averageCost: 0 }]);
+                        }
+                    });
+                }
+                
+                if (assets.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-8 text-gray-500">
+                            <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="currentColor" viewBox="0 0 20 20">
+                                <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                            </svg>
+                            <p class="text-sm">No assets found</p>
+                            <button onclick="showAddAsset()" class="mt-3 text-blue-600 text-sm font-medium">
+                                Add your first asset
+                            </button>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = assets.map(([assetId, data]) => {
+                    const marketInfo = marketData[assetId] || {};
+                    const symbol = (marketInfo && (marketInfo.symbol || marketInfo.sym)) ? (marketInfo.symbol || marketInfo.sym) : String(assetId).toUpperCase();
+                    const symbolShort = (typeof symbol === 'string') ? symbol.substring(0,2) : String(symbol).substring(0,2);
+                    const name = marketInfo.name || symbol;
+                    const price = typeof marketInfo.price === 'number' ? marketInfo.price : Number(marketInfo?.currentPrice) || 0;
+
+                    const value = (data.balance || 0) * price;
+                    const isOwned = (data.balance || 0) > 0;
+
+                    return `
+                        <div class="asset-card bg-gray-50 p-4 rounded-2xl cursor-pointer" 
+                             onclick="showAssetDetails('${assetId}')">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-3">
+                                    <div class="w-12 h-12 bg-black rounded-full flex items-center justify-center">
+                                        <span class="text-white text-sm font-bold">${symbolShort}</span>
+                                    </div>
+                                    <div>
+                                        <div class="font-semibold text-sm">${name}</div>
+                                        <div class="text-gray-500 text-xs">${symbol}</div>
+                                    </div>
+                                </div>
+                                <div class="text-right">
+                                    ${isOwned ? `
+                                        <div class="font-semibold text-sm">${window.nobleChain.formatCurrency(value)}</div>
+                                        <div class="text-gray-500 text-xs">${window.nobleChain.formatNumber(data.balance)} ${symbol}</div>
+                                    ` : `
+                                        <div class="text-gray-400 text-sm">Not owned</div>
+                                        <div class="text-gray-500 text-xs">${window.nobleChain.formatCurrency(price)}</div>
+                                    `}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            bindEvents() {
+                // Search functionality
+                document.getElementById('searchInput').addEventListener('input', (e) => {
+                    this.searchQuery = e.target.value;
+                    this.renderAssets();
+                });
+
+                // Listen for updates
+                document.addEventListener('noblechain:update', () => {
+                    this.updateWallet();
+                    this.renderAssets();
+                });
+            }
+        }
+
+        // Global functions
+        function toggleAssetView() {
+            walletPage.showAllAssets = !walletPage.showAllAssets;
+            document.getElementById('viewToggleText').textContent = 
+                walletPage.showAllAssets ? 'Owned Only' : 'All Assets';
+            walletPage.renderAssets();
+        }
+
+        function showAssetDetails(assetId) {
+            const marketInfo = window.nobleChain.marketData[assetId] || {};
+            const symbol = (marketInfo && (marketInfo.symbol || marketInfo.sym)) ? (marketInfo.symbol || marketInfo.sym) : String(assetId).toUpperCase();
+            const name = marketInfo.name || symbol;
+            const price = typeof marketInfo.price === 'number' ? marketInfo.price : Number(marketInfo?.currentPrice) || 0;
+            const wallet = window.nobleChain.getWallet();
+            const assetData = wallet.assets[assetId] || { balance: 0, averageCost: 0 };
+            const value = assetData.balance * price;
+
+            showModal(`${name} (${symbol})`, `
+                <div class="space-y-4">
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-600">Current Price</span>
+                            <span class="font-semibold">${window.nobleChain.formatCurrency(marketInfo.price)}</span>
+                        </div>
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-600">Your Balance</span>
+                            <span class="font-semibold">${window.nobleChain.formatNumber(assetData.balance)} ${symbol}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Total Value</span>
+                            <span class="font-semibold">${window.nobleChain.formatCurrency(value)}</span>
+                        </div>
+                    </div>
+                    
+                    ${assetData.balance > 0 ? `
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="showBuyAsset('${assetId}')" class="bg-black text-white py-3 rounded-xl font-semibold">
+                                Buy More
+                            </button>
+                            <button onclick="showSellAsset('${assetId}')" class="bg-gray-100 text-black py-3 rounded-xl font-semibold">
+                                Sell
+                            </button>
+                        </div>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button onclick="showSendAsset('${assetId}')" class="bg-blue-600 text-white py-3 rounded-xl font-semibold">
+                                Send
+                            </button>
+                            <button onclick="showReceiveAsset('${assetId}')" class="bg-green-600 text-white py-3 rounded-xl font-semibold">
+                                Receive
+                            </button>
+                        </div>
+                    ` : `
+                        <button onclick="showBuyAsset('${assetId}')" class="w-full bg-black text-white py-3 rounded-xl font-semibold">
+                            Buy ${symbol}
+                        </button>
+                        <button onclick="showReceiveAsset('${assetId}')" class="w-full bg-green-600 text-white py-3 rounded-xl font-semibold">
+                            Receive ${symbol}
+                        </button>
+                    `}
+                    
+                    <button onclick="hideModal()" class="w-full bg-gray-100 text-black py-3 rounded-xl font-semibold">
+                        Close
+                    </button>
+                </div>
+            `);
+        }
+
+        function showAddAsset() {
+            const availableAssets = Object.entries(window.nobleChain.marketData).map(([id, data]) => {
+                const symbol = (data && (data.symbol || data.sym)) ? (data.symbol || data.sym) : String(id).toUpperCase();
+                const symbolShort = (typeof symbol === 'string') ? symbol.substring(0,2) : String(symbol).substring(0,2);
+                const name = data && data.name ? data.name : symbol;
+                const price = typeof data?.price === 'number' ? data.price : Number(data?.currentPrice) || 0;
+
+                return `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-xl cursor-pointer" onclick="addAssetToWallet('${id}')">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-10 h-10 bg-black rounded-full flex items-center justify-center">
+                            <span class="text-white text-xs font-bold">${symbolShort}</span>
+                        </div>
+                        <div>
+                            <div class="font-semibold text-sm">${name}</div>
+                            <div class="text-gray-500 text-xs">${symbol}</div>
+                        </div>
+                    </div>
+                    <div class="text-sm font-semibold">${window.nobleChain.formatCurrency(price)}</div>
+                </div>
+            `;
+            }).join('');
+            
+            showModal('Add Asset', `
+                <div class="space-y-3 max-h-96 overflow-y-auto">
+                    ${availableAssets}
+                </div>
+                <button onclick="hideModal()" class="w-full bg-gray-100 text-black py-3 rounded-xl font-semibold mt-4">
+                    Close
+                </button>
+            `);
+        }
+
+        function addAssetToWallet(assetId) {
+            window.nobleChain.addAsset(window.nobleChain.currentUser.id, assetId);
+            hideModal();
+            walletPage.renderAssets();
+            alert('Asset added to your wallet!');
+        }
+
+        function showBuyAsset(assetId) {
+            const marketInfo = window.nobleChain.marketData[assetId];
+            
+            showModal('Buy ' + marketInfo.symbol, `
+                <div class="space-y-4">
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-600">Current Price</span>
+                            <span class="font-semibold">${window.nobleChain.formatCurrency(marketInfo.price)}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Amount (USD)</label>
+                        <input type="number" id="buyAmount" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="0.00" step="0.01">
+                    </div>
+                    <div class="flex space-x-3">
+                        <button onclick="hideModal()" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">
+                            Cancel
+                        </button>
+                        <button onclick="confirmBuyAsset('${assetId}')" class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">
+                            Buy
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+
+        function confirmBuyAsset(assetId) {
+            const amount = parseFloat(document.getElementById('buyAmount').value);
+            
+            if (!amount || amount <= 0) {
+                alert('Please enter a valid amount');
+                return;
+            }
+
+            try {
+                const tx = window.nobleChain.buyAsset(assetId, amount / window.nobleChain.marketData[assetId].price);
+                hideModal();
+                alert(`Successfully bought ${window.nobleChain.formatNumber(tx.amount)} ${assetId}!`);
+                walletPage.renderAssets();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        function showSellAsset(assetId) {
+            const marketInfo = window.nobleChain.marketData[assetId];
+            const wallet = window.nobleChain.getWallet();
+            const balance = wallet.assets[assetId]?.balance || 0;
+            
+            showModal('Sell ' + marketInfo.symbol, `
+                <div class="space-y-4">
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-600">Available Balance</span>
+                            <span class="font-semibold">${window.nobleChain.formatNumber(balance)} ${marketInfo.symbol}</span>
+                        </div>
+                        <div class="flex justify-between items-center">
+                            <span class="text-sm text-gray-600">Current Price</span>
+                            <span class="font-semibold">${window.nobleChain.formatCurrency(marketInfo.price)}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Amount to Sell</label>
+                        <input type="number" id="sellAmount" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="0.00" step="0.01" max="${balance}">
+                    </div>
+                    <div class="flex space-x-3">
+                        <button onclick="hideModal()" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">
+                            Cancel
+                        </button>
+                        <button onclick="confirmSellAsset('${assetId}')" class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">
+                            Sell
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+
+        function confirmSellAsset(assetId) {
+            const amount = parseFloat(document.getElementById('sellAmount').value);
+            
+            if (!amount || amount <= 0) {
+                alert('Please enter a valid amount');
+                return;
+            }
+
+            try {
+                const tx = window.nobleChain.sellAsset(assetId, amount);
+                hideModal();
+                alert(`Successfully sold ${window.nobleChain.formatNumber(tx.amount)} ${assetId}!`);
+                walletPage.renderAssets();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        function showSendAsset(assetId) {
+            const marketInfo = window.nobleChain.marketData[assetId];
+            const wallet = window.nobleChain.getWallet();
+            const balance = wallet.assets[assetId]?.balance || 0;
+            
+            showModal('Send ' + marketInfo.symbol, `
+                <div class="space-y-4">
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="flex justify-between items-center mb-2">
+                            <span class="text-sm text-gray-600">Available Balance</span>
+                            <span class="font-semibold">${window.nobleChain.formatNumber(balance)} ${marketInfo.symbol}</span>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Recipient Username</label>
+                        <input type="text" id="sendRecipient" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="Enter username">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Amount</label>
+                        <input type="number" id="sendAssetAmount" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="0.00" step="0.01" max="${balance}">
+                    </div>
+                    <div class="flex space-x-3">
+                        <button onclick="hideModal()" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">
+                            Cancel
+                        </button>
+                        <button onclick="confirmSendAsset('${assetId}')" class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+
+        function confirmSendAsset(assetId) {
+            const recipient = document.getElementById('sendRecipient').value;
+            const amount = parseFloat(document.getElementById('sendAssetAmount').value);
+            
+            if (!recipient || !amount || amount <= 0) {
+                alert('Please enter valid recipient and amount');
+                return;
+            }
+
+            try {
+                window.nobleChain.sendMoney(recipient, amount, assetId);
+                hideModal();
+                alert(`Successfully sent ${window.nobleChain.formatNumber(amount)} ${assetId} to ${recipient}!`);
+                walletPage.renderAssets();
+            } catch (error) {
+                alert(error.message);
+            }
+        }
+
+        function showReceiveAsset(assetId) {
+            hideModal();
+            setTimeout(() => {
+                showReceiveModal(assetId);
+            }, 100);
+        }
+
+        function showReceiveModal(assetId = 'USD') {
+            const asset = window.nobleChain.marketData[assetId] || { name: 'US Dollar', symbol: 'USD' };
+            const wallet = window.nobleChain.getWallet();
+            const balance = assetId === 'USD' ? wallet.dollarBalance : (wallet.assets[assetId]?.balance || 0);
+            const address = window.nobleChain.getWalletAddress(window.nobleChain.currentUser.id, assetId);
+
+            showModal('Receive ' + asset.symbol, `
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <div class="bg-gray-100 p-4 rounded-xl inline-block mb-3">
+                            <div class="w-32 h-32 bg-white rounded-lg flex items-center justify-center">
+                                <div class="text-xs font-mono text-center p-2" id="qrCode">
+                                    ${address}
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-3">Scan or copy your wallet address</p>
+                    </div>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium">Asset</span>
+                            <span class="text-sm font-semibold">${asset.name} (${asset.symbol})</span>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium">Your Balance</span>
+                            <span class="text-sm font-semibold">${window.nobleChain.formatNumber(balance)} ${asset.symbol}</span>
+                        </div>
+                        <div class="mb-3">
+                            <span class="text-sm font-medium">Wallet Address</span>
+                            <div class="mt-1 p-2 bg-white rounded border text-xs font-mono break-all" id="walletAddress">
+                                ${address}
+                            </div>
+                        </div>
+                        <button onclick="copyToClipboard('${address}')" class="w-full bg-black text-white py-2 rounded-lg font-medium mb-2">
+                            Copy Address
+                        </button>
+                        <button onclick="openSupportBuy('${assetId}')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium">
+                            Buy ${asset.symbol}
+                        </button>
+                    </div>
+                    
+                    <div class="text-xs text-gray-500 text-center">
+                        This is your internal Noble Chain wallet address. Share it with other Noble Chain users to receive funds instantly.
+                    </div>
+                </div>
+            `);
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Address copied to clipboard!');
+            });
+        }
+
+        function openSupportBuy(assetId){
+            try{
+                const asset = window.nobleChain.marketData[assetId] || { symbol: assetId };
+                const msg = `User ${window.nobleChain.currentUser?.username || 'unknown'} requests to BUY ${asset.symbol}. Please assist.`;
+                window.nobleChain.sendSupportMessage(msg, false, 'user');
+                document.dispatchEvent(new CustomEvent('noblechain:support_update'));
+                // open chat panel
+                const chatPanel = document.getElementById('chatPanel');
+                if(chatPanel && chatPanel.classList.contains('hidden')) chatPanel.classList.remove('hidden');
+            }catch(e){ console.warn(e); }
+        }
+
+        function goBack() {
+            window.location.href = 'dashboard.html';
+        }
+
+        // Modal functions
+        function showModal(title, content) {
+            document.getElementById('modalContent').innerHTML = `
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">${title}</h3>
+                    <button onclick="hideModal()" class="text-gray-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                ${content}
+            `;
+            document.getElementById('modalOverlay').classList.remove('hidden');
+        }
+
+        function hideModal() {
+            document.getElementById('modalOverlay').classList.add('hidden');
+        }
+
+        // Initialize Wallet Page
+        let walletPage;
+        document.addEventListener('DOMContentLoaded', () => {
+            walletPage = new WalletPage();
+        });
+    </script>
+</body>
+</html>

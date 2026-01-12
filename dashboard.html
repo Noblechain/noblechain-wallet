@@ -1,0 +1,727 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Noble Chain - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/typed.js/2.0.12/typed.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        .card-shadow { box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+        .balance-card { background: #000000; color: #ffffff; }
+        .action-btn { transition: all 0.2s ease; }
+        .action-btn:active { transform: scale(0.98); }
+        .asset-scroll { scrollbar-width: none; -ms-overflow-style: none; }
+        .asset-scroll::-webkit-scrollbar { display: none; }
+        .notification-dot { animation: pulse 2s infinite; }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .message-user { background: #3b82f6; color: #ffffff; }
+        .message-ai { background: #f3f4f6; color: #000000; }
+        .message-admin { background: #10b981; color: #ffffff; }
+    </style>
+</head>
+<body class="bg-white text-black min-h-screen">
+    <!-- Header -->
+    <header class="bg-white border-b border-gray-100 px-4 py-3 sticky top-0 z-40">
+        <div class="flex items-center justify-between max-w-md mx-auto">
+            <div class="flex items-center space-x-3">
+                <div class="w-8 h-8 bg-gray-200 rounded-full flex items-center justify-center">
+                    <img src="resources/user-avatar.png" alt="Profile" class="w-6 h-6 rounded-full">
+                </div>
+                <span class="font-semibold text-sm" id="username">Loading...</span>
+            </div>
+            <div class="flex items-center space-x-3">
+                <button class="relative p-2" onclick="showNotifications()">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-5 5v-5z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6a4 4 0 0 1 4 4v0a4 4 0 0 1-4 4H9l-7-7 7-7z"></path>
+                    </svg>
+                    <span class="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full notification-dot"></span>
+                </button>
+                <button onclick="safeLogout()" class="p-2 text-gray-600">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="max-w-md mx-auto px-4 pb-20">
+        <!-- Portfolio Balance Card -->
+        <div class="balance-card rounded-2xl p-6 mt-6 card-shadow">
+            <div class="flex items-center justify-between mb-2">
+                <span class="text-gray-300 text-xs font-medium">Total Portfolio Balance</span>
+                <div class="flex items-center space-x-1">
+                    <img src="resources/security-shield.png" alt="Security" class="w-4 h-4">
+                    <span class="text-gray-300 text-xs">Secured</span>
+                </div>
+            </div>
+            <div class="text-3xl font-bold mb-1" id="totalBalance">$0.00</div>
+            <div class="text-gray-400 text-xs">Secured by your recovery phrase</div>
+        </div>
+
+        <!-- Dollar Wallet Card -->
+        <div class="balance-card rounded-2xl p-6 mt-4 card-shadow">
+            <div class="text-gray-300 text-xs font-medium mb-2">Dollar Wallet Balance</div>
+            <div class="text-2xl font-semibold" id="dollarBalance">$0.00</div>
+        </div>
+
+        <!-- Primary Action Buttons -->
+        <div class="flex space-x-3 mt-6">
+            <button onclick="showAddMoney()" class="flex-1 bg-black text-white py-4 rounded-2xl font-semibold action-btn">
+                Add Money
+            </button>
+            <button onclick="showSendMoney()" class="flex-1 bg-white text-black py-4 rounded-2xl font-semibold border-2 border-black action-btn">
+                Send Money
+            </button>
+        </div>
+
+        <!-- Quick Actions -->
+        <div class="mt-8">
+            <h3 class="text-lg font-semibold mb-4">Quick Actions</h3>
+            <div class="flex space-x-3 overflow-x-auto asset-scroll pb-2">
+                <button onclick="quickPay()" class="flex-shrink-0 bg-gray-50 p-4 rounded-2xl text-center min-w-[100px] card-hover">
+                    <div class="w-8 h-8 bg-black rounded-full mx-auto mb-2 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium">Pay</span>
+                </button>
+                <button onclick="quickBuy()" class="flex-shrink-0 bg-gray-50 p-4 rounded-2xl text-center min-w-[100px] card-hover">
+                    <div class="w-8 h-8 bg-black rounded-full mx-auto mb-2 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium">Buy</span>
+                </button>
+                <button onclick="quickSell()" class="flex-shrink-0 bg-gray-50 p-4 rounded-2xl text-center min-w-[100px] card-hover">
+                    <div class="w-8 h-8 bg-black rounded-full mx-auto mb-2 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M5 10a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium">Sell</span>
+                </button>
+                <button onclick="quickReceive()" class="flex-shrink-0 bg-gray-50 p-4 rounded-2xl text-center min-w-[100px] card-hover">
+                    <div class="w-8 h-8 bg-black rounded-full mx-auto mb-2 flex items-center justify-center">
+                        <svg class="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clip-rule="evenodd"></path>
+                        </svg>
+                    </div>
+                    <span class="text-xs font-medium">Receive</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Current Market -->
+        <div class="mt-8">
+            <h3 class="text-lg font-semibold mb-4">Current Market</h3>
+            <div class="space-y-3 overflow-x-auto asset-scroll pb-2" id="marketAssets">
+                <!-- Market assets will be populated by JavaScript -->
+            </div>
+        </div>
+
+        <!-- Recent Transactions -->
+        <div class="mt-8">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold">Recent Transactions</h3>
+                <button onclick="viewAllTransactions()" class="text-sm text-gray-500">View All</button>
+            </div>
+            <div class="space-y-3" id="recentTransactions">
+                <!-- Transactions will be populated by JavaScript -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Floating Chat Widget -->
+    <div id="chatWidget" class="fixed bottom-24 right-4 z-40">
+        <button onclick="toggleChat()" class="bg-black text-white p-4 rounded-full shadow-lg hover:bg-gray-800 transition-colors">
+            <svg class="w-6 h-6" fill="currentColor" viewBox="0 0 20 20">
+                <path fill-rule="evenodd" d="M18 13V5a2 2 0 00-2-2H4a2 2 0 00-2 2v8a2 2 0 002 2h3l3 3 3-3h3a2 2 0 002-2zM5 7a1 1 0 011-1h8a1 1 0 110 2H6a1 1 0 01-1-1zm1 3a1 1 0 100 2h3a1 1 0 100-2H6z" clip-rule="evenodd"></path>
+            </svg>
+        </button>
+    </div>
+
+    <!-- Chat Panel -->
+    <div id="chatPanel" class="fixed bottom-20 right-4 w-80 h-96 bg-white border border-gray-200 rounded-2xl shadow-lg z-50 hidden flex flex-col">
+        <!-- Chat Header -->
+        <div class="bg-black text-white p-4 rounded-t-2xl flex items-center justify-between">
+            <div class="flex items-center space-x-2">
+                <div class="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span class="font-semibold">Noble Chain Support</span>
+            </div>
+            <button onclick="toggleChat()" class="text-white">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                </svg>
+            </button>
+        </div>
+        
+        <!-- Chat Messages -->
+        <div id="chatMessages" class="flex-1 p-4 overflow-y-auto">
+            <div class="text-center py-4 text-gray-500">
+                <p class="text-sm">How can we help you today?</p>
+                <button onclick="openSupportPage()" class="mt-2 text-blue-600 text-sm font-medium">
+                    Open Full Chat
+                </button>
+            </div>
+        </div>
+        
+        <!-- Chat Input -->
+        <div class="p-3 border-t border-gray-100">
+            <div class="flex items-center space-x-2">
+                <input type="text" id="quickChatInput" placeholder="Type a message..." 
+                       class="flex-1 p-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-black">
+                <button onclick="sendQuickChat()" class="bg-black text-white p-2 rounded-lg hover:bg-gray-800">
+                    <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M10.894 2.553a1 1 0 00-1.788 0l-7 14a1 1 0 001.169 1.409l5-1.429A1 1 0 009 15.571V11a1 1 0 112 0v4.571a1 1 0 00.725.962l5 1.428a1 1 0 001.17-1.408l-7-14z"></path>
+                    </svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bottom Navigation -->
+    <nav class="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 px-4 py-2 z-50">
+        <div class="flex justify-around max-w-md mx-auto">
+            <a href="dashboard.html" class="flex flex-col items-center py-2 text-black">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M10.707 2.293a1 1 0 00-1.414 0l-7 7a1 1 0 001.414 1.414L4 10.414V17a1 1 0 001 1h2a1 1 0 001-1v-2a1 1 0 011-1h2a1 1 0 011 1v2a1 1 0 001 1h2a1 1 0 001-1v-6.586l.293.293a1 1 0 001.414-1.414l-7-7z"></path>
+                </svg>
+                <span class="text-xs font-medium">Home</span>
+            </a>
+            <a href="dashboard.html#buy" onclick="showBuySell()" class="flex flex-col items-center py-2 text-gray-400">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="text-xs font-medium">Buy/Sell</span>
+            </a>
+            <a href="swap.html" class="flex flex-col items-center py-2 text-gray-400">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="text-xs font-medium">Swap</span>
+            </a>
+            <a href="transactions.html" class="flex flex-col items-center py-2 text-gray-400">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path fill-rule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clip-rule="evenodd"></path>
+                </svg>
+                <span class="text-xs font-medium">Transactions</span>
+            </a>
+            <a href="wallet.html" class="flex flex-col items-center py-2 text-gray-400">
+                <svg class="w-6 h-6 mb-1" fill="currentColor" viewBox="0 0 20 20">
+                    <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"></path>
+                </svg>
+                <span class="text-xs font-medium">Wallet</span>
+            </a>
+        </div>
+    </nav>
+
+    <!-- Modals -->
+    <div id="modalOverlay" class="fixed inset-0 bg-black bg-opacity-50 z-50 hidden">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-white rounded-2xl p-6 w-full max-w-sm">
+                <div id="modalContent">
+                    <!-- Modal content will be populated by JavaScript -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="main.js"></script>
+    <script>
+        // Restore a simple session using localStorage so the UI can show username
+        (function(){
+            try {
+                const savedUsername = localStorage.getItem('noblechain_current_username');
+                const savedSession = localStorage.getItem('noblechain_session');
+                window.nobleChain = window.nobleChain || {};
+                if (savedUsername && !window.nobleChain.currentUser) {
+                    let sid = null;
+                    try { sid = savedSession ? JSON.parse(savedSession).userId : null; } catch(e){}
+                    window.nobleChain.currentUser = { id: sid || ('local_' + Date.now().toString(36)), username: savedUsername };
+                }
+                // populate header username immediately
+                const nameEl = document.getElementById('username');
+                if (nameEl) nameEl.textContent = localStorage.getItem('noblechain_current_username') || (window.nobleChain.currentUser && window.nobleChain.currentUser.username) || 'User';
+            } catch(e) { console.warn(e); }
+        })();
+
+        function safeLogout(){
+            localStorage.removeItem('noblechain_session');
+            localStorage.removeItem('noblechain_current_username');
+            localStorage.removeItem('noblechain_seed_saved');
+            window.nobleChain = window.nobleChain || {};
+            window.nobleChain.currentUser = null;
+            window.location.href = 'index.html';
+        }
+        // Dashboard-specific functionality
+        class Dashboard {
+            constructor() {
+                this.init();
+            }
+
+            init() {
+                console.log('Dashboard.init()');
+                if (!window.nobleChain || !window.nobleChain.currentUser) {
+                    console.warn('No nobleChain session found; redirecting to index');
+                    window.location.href = 'index.html';
+                    return;
+                }
+
+                this.updateDashboard();
+                this.renderMarketAssets();
+                this.renderRecentTransactions();
+                this.bindEvents();
+                
+                // Update every 5 seconds
+                setInterval(() => this.updateDashboard(), 5000);
+            }
+
+            updateDashboard() {
+                try {
+                    const user = window.nobleChain.currentUser;
+                    let wallet = null;
+                    try { wallet = window.nobleChain.getWallet(); } catch (e) { wallet = null; }
+
+                    // Ensure wallet exists to avoid crashes
+                    if (!wallet) {
+                        console.warn('No wallet found for current user, using empty wallet fallback');
+                        wallet = { dollarBalance: 0, assets: {} };
+                    }
+
+                    // Update user info
+                    document.getElementById('username').textContent = user.username || 'User';
+
+                    // Update balances
+                    const totalBalance = (window.nobleChain.formatCurrency) ? window.nobleChain.getTotalBalance() : 0;
+                    const dollarBalance = wallet.dollarBalance || 0;
+
+                    document.getElementById('totalBalance').textContent = window.nobleChain.formatCurrency ? window.nobleChain.formatCurrency(totalBalance) : '$0.00';
+                    document.getElementById('dollarBalance').textContent = window.nobleChain.formatCurrency ? window.nobleChain.formatCurrency(dollarBalance) : '$0.00';
+                } catch (err) {
+                    console.error('updateDashboard failed', err);
+                }
+            }
+
+            renderMarketAssets() {
+                const container = document.getElementById('marketAssets');
+                const marketData = window.nobleChain && window.nobleChain.marketData ? window.nobleChain.marketData : {};
+                const formatCurrency = (amount, decimals = 2) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: decimals, maximumFractionDigits: decimals }).format(amount);
+
+                const renderFromData = (md) => container.innerHTML = Object.entries(md).slice(0, 8).map(([id, data]) => {
+                    const symbol = (data && (data.symbol || data.sym)) ? (data.symbol || data.sym) : String(id).toUpperCase();
+                    const symbolShort = (typeof symbol === 'string') ? symbol.substring(0, 2) : String(symbol).substring(0, 2);
+                    const name = data && data.name ? data.name : symbol;
+                    const price = data && typeof data.price === 'number' ? data.price : Number(data && data.currentPrice) || 0;
+                    const change = (data && typeof data.change === 'number') ? data.change : 0;
+
+                    const bg = (data && data.color) ? data.color : '#000';
+                    const logo = (data && data.logo) ? data.logo : symbolShort;
+                    return `
+                    <div onclick="showReceiveModal('${id}')" class="flex items-center justify-between bg-gray-50 p-4 rounded-2xl cursor-pointer">
+                        <div class="flex items-center space-x-3">
+                            <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:${bg};">
+                                <span class="text-white text-xs font-bold">${logo}</span>
+                            </div>
+                            <div>
+                                <div class="font-semibold text-sm">${name}</div>
+                                <div class="text-gray-500 text-xs">${symbol}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="font-semibold text-sm">${(window.nobleChain && window.nobleChain.formatCurrency) ? window.nobleChain.formatCurrency(price, 2) : formatCurrency(price,2)}</div>
+                            <div class="text-xs ${change >= 0 ? 'text-green-500' : 'text-red-500'}">
+                                ${change >= 0 ? '+' : ''}${(typeof change === 'number') ? change.toFixed(2) : '0.00'}%
+                            </div>
+                        </div>
+                    </div>
+                `;
+                }).join('');
+                
+                // If no marketData available from main app, fetch from CoinGecko
+                if (!marketData || Object.keys(marketData).length === 0) {
+                    // fetch a few coins as fallback
+                    fetch('https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,tether,litecoin&vs_currencies=usd&include_24hr_change=true')
+                        .then(r => r.json())
+                        .then(data => {
+                            const md = {};
+                            if (data.bitcoin) md.bitcoin = { symbol: 'BTC', name: 'Bitcoin', price: data.bitcoin.usd || 0, change: data.bitcoin.usd_24h_change || 0 };
+                            if (data.ethereum) md.ethereum = { symbol: 'ETH', name: 'Ethereum', price: data.ethereum.usd || 0, change: data.ethereum.usd_24h_change || 0 };
+                            if (data.tether) md.tether = { symbol: 'USDT', name: 'Tether', price: data.tether.usd || 0, change: data.tether.usd_24h_change || 0 };
+                            if (data.litecoin) md.litecoin = { symbol: 'LTC', name: 'Litecoin', price: data.litecoin.usd || 0, change: data.litecoin.usd_24h_change || 0 };
+                            renderFromData(md);
+                        })
+                        .catch(err => {
+                            console.warn('Market fetch failed', err);
+                            container.innerHTML = '<div class="text-sm text-gray-500">Market data unavailable</div>';
+                        });
+                } else {
+                    renderFromData(marketData);
+                }
+            }
+
+            renderRecentTransactions() {
+                const container = document.getElementById('recentTransactions');
+                const transactions = window.nobleChain.transactions
+                    .filter(tx => tx.userId === window.nobleChain.currentUser.id)
+                    .sort((a, b) => b.timestamp - a.timestamp)
+                    .slice(0, 5);
+
+                if (transactions.length === 0) {
+                    container.innerHTML = `
+                        <div class="text-center py-8 text-gray-500">
+                            <svg class="w-12 h-12 mx-auto mb-3 opacity-50" fill="currentColor" viewBox="0 0 20 20">
+                                <path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4zM18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z"></path>
+                            </svg>
+                            <p class="text-sm">No transactions yet</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                container.innerHTML = transactions.map(tx => {
+                    const isPositive = tx.type === 'receive' || tx.type === 'buy' || tx.type === 'add_money';
+                    const color = isPositive ? 'text-green-500' : 'text-red-500';
+                    const icon = isPositive ? 
+                        '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.293l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clip-rule="evenodd"></path></svg>' :
+                        '<svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clip-rule="evenodd"></path></svg>';
+
+                    return `
+                        <div class="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                            <div class="flex items-center space-x-3">
+                                <div class="w-10 h-10 bg-black rounded-full flex items-center justify-center">
+                                    ${icon}
+                                </div>
+                                <div>
+                                    <div class="font-semibold text-sm capitalize">${tx.type.replace('_', ' ')}</div>
+                                    <div class="text-gray-500 text-xs">${tx.counterparty || 'System'}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="font-semibold text-sm ${color}">
+                                    ${isPositive ? '+' : '-'}${window.nobleChain.formatNumber(tx.amount)} ${tx.asset}
+                                </div>
+                                <div class="text-gray-500 text-xs">
+                                    ${new Date(tx.timestamp).toLocaleDateString()}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            }
+
+            bindEvents() {
+                // Listen for updates
+                document.addEventListener('noblechain:update', () => {
+                    this.updateDashboard();
+                    this.renderMarketAssets();
+                    this.renderRecentTransactions();
+                });
+            }
+        }
+
+        // Global functions for button actions
+        function showNotifications() {
+            const notes = JSON.parse(localStorage.getItem('noblechain_notifications') || '[]');
+            if (!notes || notes.length === 0) {
+                showModal('Notifications', `
+                    <div class="text-center py-8">
+                        <svg class="w-12 h-12 mx-auto mb-3 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M10 2L3 7v11a2 2 0 002 2h10a2 2 0 002-2V7l-7-5zM10 18a2 2 0 110-4 2 2 0 010 4z"></path>
+                        </svg>
+                        <p class="text-gray-600">No new notifications</p>
+                    </div>
+                `);
+                return;
+            }
+
+            const listHtml = notes.map(n => `
+                <div class="p-3 border-b border-gray-100">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <div class="font-semibold text-sm">${n.title}</div>
+                            <div class="text-xs text-gray-500">${new Date(n.timestamp).toLocaleString()}</div>
+                        </div>
+                        <div class="text-right text-sm text-gray-700">${n.type}</div>
+                    </div>
+                    <div class="text-sm text-gray-600 mt-2">${n.message}</div>
+                </div>
+            `).join('');
+
+            showModal('Notifications', `<div class="max-h-72 overflow-y-auto">${listHtml}</div>`);
+        }
+
+        function showAddMoney() {
+            console.log('showAddMoney');
+            showModal('Add Money', `
+                <div class="space-y-4">
+                    <p class="text-gray-600 text-sm">To complete your deposit setup, please contact Noble Chain Support.</p>
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <p class="text-sm font-medium mb-1">Support Email:</p>
+                        <p class="text-sm text-blue-600">noblechainhelpdesk@gmail.com</p>
+                    </div>
+                    <button onclick="hideModal()" class="w-full bg-black text-white py-3 rounded-xl font-semibold">
+                        Contact Support
+                    </button>
+                </div>
+            `);
+        }
+
+        function showSendMoney() {
+            console.log('showSendMoney');
+            showModal('Send Money', `
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Recipient Username</label>
+                        <input type="text" id="recipientUsername" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="Enter username">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium mb-2">Amount (USD)</label>
+                        <input type="number" id="sendAmount" class="w-full p-3 border border-gray-200 rounded-xl" placeholder="0.00" step="0.01">
+                    </div>
+                    <div class="flex space-x-3">
+                        <button onclick="hideModal()" class="flex-1 bg-gray-100 text-black py-3 rounded-xl font-semibold">
+                            Cancel
+                        </button>
+                        <button onclick="confirmSendMoney()" class="flex-1 bg-black text-white py-3 rounded-xl font-semibold">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            `);
+        }
+
+        function confirmSendMoney() {
+            const username = document.getElementById('recipientUsername').value;
+            const amount = parseFloat(document.getElementById('sendAmount').value);
+            
+            if (!username || !amount || amount <= 0) {
+                alert('Please enter valid recipient and amount');
+                return;
+            }
+
+            try {
+                if (!window.nobleChain || !window.nobleChain.sendMoney) throw new Error('sendMoney not available');
+                window.nobleChain.sendMoney(username, amount);
+                hideModal();
+                alert('Money sent successfully!');
+            } catch (error) {
+                console.error('confirmSendMoney error', error);
+                alert(error.message || 'Failed to send money');
+            }
+        }
+
+        function quickPay() {
+            showSendMoney();
+        }
+
+        function quickBuy() {
+            window.location.href = 'wallet.html#buy';
+        }
+
+        function quickSell() {
+            window.location.href = 'wallet.html#sell';
+        }
+
+        function quickReceive() {
+            showReceiveModal();
+        }
+
+        function showReceiveModal(assetId = 'USD') {
+            const asset = window.nobleChain.marketData[assetId] || { name: 'US Dollar', symbol: 'USD' };
+            const wallet = window.nobleChain.getWallet();
+            const balance = assetId === 'USD' ? wallet.dollarBalance : (wallet.assets[assetId]?.balance || 0);
+            const address = window.nobleChain.getWalletAddress(window.nobleChain.currentUser.id, assetId);
+
+            showModal('Receive ' + asset.symbol, `
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <div class="bg-gray-100 p-4 rounded-xl inline-block mb-3">
+                            <div class="w-32 h-32 bg-white rounded-lg flex items-center justify-center">
+                                <div class="text-xs font-mono text-center p-2" id="qrCode">
+                                    ${address}
+                                </div>
+                            </div>
+                        </div>
+                        <p class="text-sm text-gray-600 mb-3">Scan or copy your wallet address</p>
+                    </div>
+                    
+                    <div class="bg-gray-50 p-4 rounded-xl">
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium">Asset</span>
+                            <span class="text-sm font-semibold">${asset.name} (${asset.symbol})</span>
+                        </div>
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-sm font-medium">Your Balance</span>
+                            <span class="text-sm font-semibold">${window.nobleChain.formatNumber(balance)} ${asset.symbol}</span>
+                        </div>
+                        <div class="mb-3">
+                            <span class="text-sm font-medium">Wallet Address</span>
+                            <div class="mt-1 p-2 bg-white rounded border text-xs font-mono break-all" id="walletAddress">
+                                ${address}
+                            </div>
+                        </div>
+                        <button onclick="copyToClipboard('${address}')" class="w-full bg-black text-white py-2 rounded-lg font-medium mb-2">
+                            Copy Address
+                        </button>
+                        <button onclick="openSupportBuy('${assetId}')" class="w-full bg-blue-600 text-white py-2 rounded-lg font-medium">
+                            Buy ${asset.symbol}
+                        </button>
+                    </div>
+                    
+                    <div class="text-xs text-gray-500 text-center">
+                        This is your internal Noble Chain wallet address. Share it with other Noble Chain users to receive funds instantly.
+                    </div>
+                </div>
+            `);
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                alert('Address copied to clipboard!');
+            });
+        }
+
+        function viewAllTransactions() {
+            window.location.href = 'transactions.html';
+        }
+
+        function showBuySell() {
+            window.location.href = 'wallet.html';
+        }
+
+        // Chat Widget Functions
+        function toggleChat() {
+            const chatPanel = document.getElementById('chatPanel');
+            const isVisible = !chatPanel.classList.contains('hidden');
+            
+            if (isVisible) {
+                chatPanel.classList.add('hidden');
+            } else {
+                chatPanel.classList.remove('hidden');
+                renderQuickChat();
+            }
+        }
+
+        function renderQuickChat() {
+            const chatMessages = document.getElementById('chatMessages');
+            const messages = window.nobleChain.getSupportChats(window.nobleChain.currentUser.id);
+            
+            if (messages.length === 0) {
+                chatMessages.innerHTML = `
+                    <div class="text-center py-4 text-gray-500">
+                        <p class="text-xs">How can we help you today?</p>
+                    </div>
+                `;
+                return;
+            }
+
+            // Show last 3 messages
+            const recentMessages = messages.slice(-3);
+            chatMessages.innerHTML = recentMessages.map(message => {
+                const isUser = message.senderType === 'user';
+                const bgColor = isUser ? 'bg-black text-white' : 'bg-gray-100 text-black';
+                const alignment = isUser ? 'ml-auto' : 'mr-auto';
+                
+                return `
+                    <div class="mb-2 ${isUser ? 'text-right' : 'text-left'}">
+                        <div class="inline-block max-w-[200px]">
+                            <div class="inline-block px-3 py-2 rounded-lg text-xs ${bgColor} ${alignment}">
+                                ${message.message}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+            
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        function sendQuickChat() {
+            const input = document.getElementById('quickChatInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+            
+            // Send user message
+            window.nobleChain.sendSupportMessage(message, false, 'user');
+            input.value = '';
+            
+            // Re-render chat
+            renderQuickChat();
+            
+            // Simulate AI response
+            setTimeout(() => {
+                const aiResponse = window.nobleChain.generateAIResponse(message);
+                window.nobleChain.sendSupportMessage(aiResponse, false, 'ai');
+                renderQuickChat();
+            }, 1000 + Math.random() * 1000);
+        }
+
+        function openSupportPage() {
+            window.location.href = 'support.html';
+        }
+
+        function openSupportBuy(assetId){
+            try{
+                const asset = window.nobleChain.marketData[assetId] || { symbol: assetId };
+                const msg = `User ${window.nobleChain.currentUser?.username || 'unknown'} requests to BUY ${asset.symbol}. Please assist.`;
+                window.nobleChain.sendSupportMessage(msg, false, 'user');
+                document.dispatchEvent(new CustomEvent('noblechain:support_update'));
+                // open chat panel
+                const chatPanel = document.getElementById('chatPanel');
+                if(chatPanel.classList.contains('hidden')) chatPanel.classList.remove('hidden');
+                renderQuickChat();
+            }catch(e){ console.warn(e); }
+        }
+
+        // Modal functions
+        function showModal(title, content) {
+            document.getElementById('modalContent').innerHTML = `
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold">${title}</h3>
+                    <button onclick="hideModal()" class="text-gray-400">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                ${content}
+            `;
+            document.getElementById('modalOverlay').classList.remove('hidden');
+        }
+
+        function hideModal() {
+            document.getElementById('modalOverlay').classList.add('hidden');
+        }
+
+        // Initialize Dashboard
+        let dashboard;
+        document.addEventListener('DOMContentLoaded', () => {
+            dashboard = new Dashboard();
+            
+            // Initialize chat widget
+            document.addEventListener('DOMContentLoaded', () => {
+                // Listen for support chat updates
+                document.addEventListener('noblechain:support_update', () => {
+                    const chatPanel = document.getElementById('chatPanel');
+                    if (!chatPanel.classList.contains('hidden')) {
+                        renderQuickChat();
+                    }
+                });
+            });
+        });
+    </script>
+</body>
+</html>
