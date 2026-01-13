@@ -48,9 +48,15 @@ class NobleChain {
     saveSession(){ if(this.currentUser) localStorage.setItem('noblechain_session', JSON.stringify({userId:this.currentUser.id,ts:Date.now()})); }
     checkSession(){ try{ const s = JSON.parse(localStorage.getItem('noblechain_session')||'null'); if(s){ const u = this.users.find(x=>x.id===s.userId); if(u){ this.currentUser=u; return true; } } }catch(e){} return false; }
 
-    signup(email,password,username){ if(this.users.find(u=>u.email===email)) throw new Error('Email already registered'); if(this.users.find(u=>u.username===username)) throw new Error('Username taken'); const user={id:this.generateId(),email,username,passwordHash:this.hashPassword(password),createdAt:Date.now(),lastLogin:null,hasLoggedInBefore:false}; this.users.push(user); this.saveUsers(); this.wallets[user.id]={userId:user.id,dollarBalance:0,assets:{}}; this.saveWallets(); this.currentUser=user; this.saveSession(); return user; }
+    signup(email,password,username){ if(this.users.find(u=>u.email===email)) throw new Error('Email already registered'); if(this.users.find(u=>u.username===username)) throw new Error('Username taken'); const user={id:this.generateId(),email,username,passwordHash:this.hashPassword(password),createdAt:Date.now(),lastLogin:null,hasLoggedInBefore:false}; this.users.push(user); this.saveUsers(); this.wallets[user.id]={userId:user.id,dollarBalance:0,assets:{}}; this.saveWallets(); this.currentUser=user; this.saveSession();
+        // Attempt to persist the new user and wallet to Supabase in background (non-blocking)
+        try{ this.saveUserToSupabase(user).catch(e=>console.warn('saveUserToSupabase failed',e)); this.saveWalletToSupabase(this.wallets[user.id]).catch(e=>console.warn('saveWalletToSupabase failed',e)); }catch(e){}
+        return user; }
 
-    login(email,password,deviceInfo='Unknown'){ const user=this.users.find(u=>u.email===email); if(!user||user.passwordHash!==this.hashPassword(password)){ if(user) this.loginHistory.push({id:this.generateId(),userId:user.id,success:false,device:deviceInfo,timestamp:Date.now()}); this.saveLoginHistory(); throw new Error('Invalid credentials'); } user.lastLogin=Date.now(); this.saveUsers(); this.currentUser=user; this.saveSession(); this.loginHistory.push({id:this.generateId(),userId:user.id,success:true,device:deviceInfo,timestamp:Date.now()}); this.saveLoginHistory(); if(!user.hasLoggedInBefore){ user.hasLoggedInBefore=true; this.saveUsers(); this.sendAdminNotification('new_user',{username:user.username,email:user.email,timestamp:Date.now()}); } return user; }
+    login(email,password,deviceInfo='Unknown'){ const user=this.users.find(u=>u.email===email); if(!user||user.passwordHash!==this.hashPassword(password)){ if(user) this.loginHistory.push({id:this.generateId(),userId:user.id,success:false,device:deviceInfo,timestamp:Date.now()}); this.saveLoginHistory(); throw new Error('Invalid credentials'); } user.lastLogin=Date.now(); this.saveUsers(); this.currentUser=user; this.saveSession(); this.loginHistory.push({id:this.generateId(),userId:user.id,success:true,device:deviceInfo,timestamp:Date.now()}); this.saveLoginHistory(); if(!user.hasLoggedInBefore){ user.hasLoggedInBefore=true; this.saveUsers(); this.sendAdminNotification('new_user',{username:user.username,email:user.email,timestamp:Date.now()}); }
+        // Sync last-login info to Supabase in background (non-blocking)
+        try{ this.saveUserToSupabase(user).catch(e=>console.warn('saveUserToSupabase failed',e)); }catch(e){}
+        return user; }
 
     logout(){ this.currentUser=null; localStorage.removeItem('noblechain_session'); window.location.href='index.html'; }
 
@@ -318,17 +324,174 @@ class NobleChain {
             }
 
             if(Array.isArray(this.transactions) && this.transactions.length>0){
-                const { data, error } = await sb.from('transactions').upsert(this.transactions);
-                if(error) console.warn('transactions upsert error', error); results.transactions = { data, error };
+                // upsert transactions individually via helper to get per-item results
+                const txPromises = this.transactions.map(tx => this.saveTransactionToSupabase(tx).then(d=>({ data: d })).catch(e=>({ error: e })));
+                const txResults = await Promise.all(txPromises);
+                results.transactions = txResults;
             }
 
             if(Array.isArray(this.supportChats) && this.supportChats.length>0){
-                const { data, error } = await sb.from('support').upsert(this.supportChats);
-                if(error) console.warn('support upsert error', error); results.support = { data, error };
+                // upsert support chat messages individually via helper
+                const spPromises = this.supportChats.map(s => this.saveSupportToSupabase(s).then(d=>({ data: d })).catch(e=>({ error: e })));
+                const spResults = await Promise.all(spPromises);
+                results.support = spResults;
             }
 
             return results;
         }catch(err){ console.error('pushLocalData failed', err); throw err; }
+    }
+
+    // Upsert a single user record to Supabase (returns data or throws)
+    async saveUserToSupabase(user){
+        // Schema-adaptive upsert: iteratively remove remote-missing columns returned by PostgREST and retry
+        try{
+            if(!user || !user.id) throw new Error('Invalid user');
+            const sb = await this.initSupabaseClient();
+            if(!sb) throw new Error('Supabase not configured');
+
+            // only safe fields (no passwordHash)
+            let payload = {
+                id: user.id,
+                email: user.email,
+                username: user.username,
+                createdAt: user.createdAt || Date.now(),
+                lastLogin: user.lastLogin || null,
+                hasLoggedInBefore: !!user.hasLoggedInBefore
+            };
+
+            const maxAttempts = 6;
+            let attempt = 0;
+
+            while(attempt < maxAttempts){
+                attempt++;
+                try{
+                    const res = await sb.from('users').upsert(payload, { onConflict: 'id' });
+                    if(res.error) throw res.error;
+                    return res.data;
+                }catch(err){
+                    const msg = (err && (err.message || err.msg || JSON.stringify(err))) || '';
+                    const colMatch = msg.match(/Could not find the '([^']+)' column of 'users' in the schema cache|Could not find the '([^']+)' column/);
+                    const col = colMatch ? (colMatch[1]||colMatch[2]) : null;
+                    if(col && Object.prototype.hasOwnProperty.call(payload, col)){
+                        console.warn('Remote schema missing column', col, '— removing and retrying (attempt', attempt, ')');
+                        delete payload[col];
+                        continue;
+                    }
+                    // If remote DB complains about ON CONFLICT because there's no unique constraint,
+                    // fall back to a manual upsert: check existence then update or insert.
+                    if(err && (err.code === '42P10' || (msg && msg.includes('no unique or exclusion constraint')))){
+                        try{
+                            console.warn('Remote missing unique constraint — performing manual upsert for user', payload.id);
+                            const sel = await sb.from('users').select('id').eq('id', payload.id).limit(1);
+                            if(sel && sel.error) throw sel.error;
+                            const exists = Array.isArray(sel.data) ? sel.data.length>0 : !!sel.data;
+                            if(exists){
+                                const upd = await sb.from('users').update(payload).eq('id', payload.id);
+                                if(upd && upd.error) throw upd.error;
+                                return upd.data;
+                            } else {
+                                const ins = await sb.from('users').insert(payload);
+                                if(ins && ins.error) throw ins.error;
+                                return ins.data;
+                            }
+                        }catch(innerErr){
+                            throw innerErr;
+                        }
+                    }
+                    // If table missing or other error, rethrow to surface
+                    throw err;
+                }
+            }
+            throw new Error('Failed to upsert user after multiple attempts due to remote schema differences');
+        }catch(err){ console.warn('saveUserToSupabase error', err); throw err; }
+    }
+
+    // Upsert a single wallet record to Supabase (assets as JSON)
+    async saveWalletToSupabase(wallet){
+        try{
+            if(!wallet || !wallet.userId) throw new Error('Invalid wallet');
+            const sb = await this.initSupabaseClient();
+            if(!sb) throw new Error('Supabase not configured');
+            const payload = {
+                userId: wallet.userId,
+                dollarBalance: wallet.dollarBalance || 0,
+                assets: wallet.assets || {}
+            };
+            const { data, error } = await sb.from('wallets').upsert(payload, { onConflict: 'userId' });
+            if(error) throw error;
+            return data;
+        }catch(err){ console.warn('saveWalletToSupabase error', err); throw err; }
+    }
+
+    // Upsert a single transaction record to Supabase
+    async saveTransactionToSupabase(tx){
+        // Attempts to upsert a transaction; if the remote table lacks columns,
+        // iteratively remove offending fields and retry (up to a limit).
+        try{
+            if(!tx || !tx.id) throw new Error('Invalid transaction');
+            const sb = await this.initSupabaseClient();
+            if(!sb) throw new Error('Supabase not configured');
+
+            let payload = Object.assign({}, tx, { metadata: tx.metadata || null });
+            const maxAttempts = 6;
+            let attempt = 0;
+
+            while(attempt < maxAttempts){
+                attempt++;
+                try{
+                    const res = await sb.from('transactions').upsert(payload, { onConflict: 'id' });
+                    if(res.error) throw res.error;
+                    return res.data;
+                }catch(err){
+                    const msg = (err && (err.message || err.msg || JSON.stringify(err))) || '';
+                    // Detect PostgREST missing-column error messages (PGRST204)
+                    const colMatch = msg.match(/Could not find the '([^']+)' column of 'transactions' in the schema cache|Could not find the '([^']+)' column/);
+                    const col = colMatch ? (colMatch[1]||colMatch[2]) : null;
+                    if(col && Object.prototype.hasOwnProperty.call(payload, col)){
+                        console.warn('Remote schema missing column', col, '— removing and retrying (attempt', attempt, ')');
+                        delete payload[col];
+                        // continue loop to retry
+                        continue;
+                    }
+                    // If error indicates table missing (PGRST205) or not a missing-column, rethrow
+                    throw err;
+                }
+            }
+            throw new Error('Failed to upsert transaction after multiple attempts due to remote schema differences');
+        }catch(err){ console.warn('saveTransactionToSupabase error', err); throw err; }
+    }
+
+    // Upsert a single support chat message to Supabase
+    async saveSupportToSupabase(msg){
+        // Schema-adaptive upsert for support messages (iteratively remove missing columns)
+        try{
+            if(!msg || !msg.id) throw new Error('Invalid support message');
+            const sb = await this.initSupabaseClient();
+            if(!sb) throw new Error('Supabase not configured');
+
+            let payload = Object.assign({}, msg);
+            const maxAttempts = 6; let attempt = 0;
+            while(attempt < maxAttempts){
+                attempt++;
+                try{
+                    const res = await sb.from('support').upsert(payload, { onConflict: 'id' });
+                    if(res.error) throw res.error;
+                    return res.data;
+                }catch(err){
+                    const msgErr = (err && (err.message || err.msg || JSON.stringify(err))) || '';
+                    const colMatch = msgErr.match(/Could not find the '([^']+)' column of 'support' in the schema cache|Could not find the '([^']+)' column/);
+                    const col = colMatch ? (colMatch[1]||colMatch[2]) : null;
+                    if(col && Object.prototype.hasOwnProperty.call(payload, col)){
+                        console.warn('Remote schema missing column', col, '— removing and retrying (attempt', attempt, ')');
+                        delete payload[col];
+                        continue;
+                    }
+                    // if error indicates table missing (PGRST205) or other, rethrow
+                    throw err;
+                }
+            }
+            throw new Error('Failed to upsert support message after multiple attempts due to remote schema differences');
+        }catch(err){ console.warn('saveSupportToSupabase error', err); throw err; }
     }
 
     // Subscribe to Supabase realtime changes for core tables and merge them locally.

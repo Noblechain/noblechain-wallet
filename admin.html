@@ -40,6 +40,7 @@
                 <button id="connectBtn" onclick="showConnectModal()" class="bg-black text-white px-4 py-2 rounded-lg text-sm font-medium">
                     Connect DB
                 </button>
+                <button id="createDevTablesBtn" onclick="showDevSqlModal()" title="Create dev tables (shows SQL to run in Supabase console)" class="bg-yellow-50 text-yellow-800 px-3 py-2 rounded-lg text-sm font-medium">Create Dev Tables</button>
                 <button id="pullBtn" onclick="doPull()" class="bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm font-medium">Pull</button>
                 <button id="pushBtn" onclick="doPush()" class="bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm font-medium">Push</button>
                 <button id="disconnectDbBtn" onclick="disconnectSupabase()" class="bg-gray-100 text-black px-3 py-2 rounded-lg text-sm font-medium">Disconnect</button>
@@ -74,6 +75,28 @@
                 </button>
             </div>
         </div>
+
+            <!-- Quick Push Panel: select records and push selected to Supabase -->
+            <div class="bg-white rounded-2xl p-6 card-shadow mb-6" id="selectPushCard">
+                <h2 class="text-lg font-semibold mb-3">Push Selected Records to Remote</h2>
+                <div class="flex items-center space-x-3 mb-4">
+                    <label class="text-sm text-gray-600">Record type</label>
+                    <select id="recordTypeSelect" class="p-2 border rounded" onchange="loadSelectableRecords()">
+                        <option value="users">Users</option>
+                        <option value="transactions">Transactions</option>
+                        <option value="support">Support Chats</option>
+                    </select>
+                    <button id="loadRecordsBtn" onclick="loadSelectableRecords()" class="bg-white border border-gray-200 px-3 py-2 rounded-lg text-sm">Load</button>
+                    <button id="pushSelectedBtn" onclick="pushSelectedRecords()" class="bg-black text-white px-3 py-2 rounded-lg text-sm" disabled>Push Selected</button>
+                    <button id="selectAllBtn" onclick="toggleSelectAll()" class="bg-gray-100 px-3 py-2 rounded-lg text-sm">Select All</button>
+                </div>
+
+                <div id="selectableList" class="max-h-48 overflow-y-auto border rounded p-2 text-sm text-gray-700">
+                    <!-- Loaded records will appear here with checkboxes -->
+                </div>
+
+                <div id="pushResults" class="mt-4 text-sm"></div>
+            </div>
 
         <!-- Login Activity Tab -->
         <div id="loginsTab" class="tab-content hidden">
@@ -1020,11 +1043,25 @@
             try{
                 // Temporarily set config on nobleChain for init
                 if(window.nobleChain) window.nobleChain.supabaseConfig = cfg;
-                const sb = window.nobleChain?.initSupabaseClient();
-                if(!sb) throw new Error('Supabase client unavailable (check library loaded)');
-                // test read from users table (limit 1)
-                const test = await sb.from('users').select('id').limit(1);
-                if(test.error) throw test.error;
+                const sb = await window.nobleChain?.initSupabaseClient();
+                let ok = false;
+                if(sb && typeof sb.from === 'function'){
+                    try{
+                        const test = await sb.from('users').select('id').limit(1);
+                        if(!test || test.error) throw (test && test.error) || new Error('Unknown error from supabase client');
+                        ok = true;
+                    }catch(e){
+                        console.warn('Client SDK test failed, will fallback to REST test', e);
+                    }
+                }
+
+                // Fallback: direct REST call to surface HTTP status/body for debugging (helps diagnose 401/RLS issues)
+                if(!ok){
+                    const restUrl = (cfg.url.replace(/\/$/, '') + '/rest/v1/users?select=id&limit=1');
+                    const r = await fetch(restUrl, { headers: { 'apikey': cfg.key, 'Authorization': 'Bearer ' + cfg.key } });
+                    const txt = await r.text().catch(()=>'');
+                    if(!r.ok) throw new Error('REST test failed: HTTP ' + r.status + ' - ' + txt);
+                }
                 // save to sessionStorage only after a successful test
                 try{ sessionStorage.setItem('noblechain_supabase', JSON.stringify(cfg)); }catch(e){ console.warn('sessionStorage error', e); }
                 updateDBStatus(true);
@@ -1048,12 +1085,29 @@
             const cfg = { url, key };
             try{
                 if(window.nobleChain) window.nobleChain.supabaseConfig = cfg;
-                const sb = window.nobleChain?.initSupabaseClient();
-                if(!sb) throw new Error('Supabase library not loaded or client initialization failed');
-                const test = await sb.from('users').select('id').limit(1);
-                if(test && test.error) throw test.error;
-                alert('Validation succeeded — credentials appear valid.');
-                return true;
+                const sb = await window.nobleChain?.initSupabaseClient();
+                if(sb && typeof sb.from === 'function'){
+                    try{
+                        const test = await sb.from('users').select('id').limit(1);
+                        if(test && test.error) throw test.error;
+                        alert('Validation succeeded — credentials appear valid (SDK).');
+                        return true;
+                    }catch(e){
+                        console.warn('SDK validation failed, will try REST endpoint', e);
+                    }
+                }
+
+                // Fallback REST check to report HTTP status/body (useful for 401/RLS debugging)
+                const restUrl = (cfg.url.replace(/\/$/, '') + '/rest/v1/users?select=id&limit=1');
+                const resp = await fetch(restUrl, { headers: { 'apikey': cfg.key, 'Authorization': 'Bearer ' + cfg.key } });
+                const body = await resp.text().catch(()=>'');
+                if(resp.ok){
+                    alert('Validation succeeded — REST access OK (HTTP ' + resp.status + ').');
+                    return true;
+                } else {
+                    alert('Validation failed — REST returned HTTP ' + resp.status + ' - ' + body);
+                    return false;
+                }
             }catch(err){
                 console.error('Test credentials failed', err);
                 try{ if(window.nobleChain) { delete window.nobleChain.supabase; delete window.nobleChain.supabaseConfig; } }catch(e){}
@@ -1153,6 +1207,120 @@
                 const when = ts ? new Date(ts) : new Date();
                 el.textContent = when.toLocaleString();
             }catch(e){ console.warn(e); }
+        }
+
+        // Show SQL modal for creating dev tables & permissive policies
+        function showDevSqlModal(){
+            const cfg = loadSupabaseConfig() || {};
+            const projectHost = cfg.url || '';
+            const sql = `-- SAFE: create tables if missing\n\ncreate table if not exists public.users (\n  id text primary key,\n  email text,\n  username text,\n  createdAt bigint,\n  lastLogin bigint,\n  hasLoggedInBefore boolean\n);\n\ncreate table if not exists public.wallets (\n  userId text primary key,\n  dollarBalance numeric,\n  assets jsonb\n);\n\ncreate table if not exists public.transactions (\n  id text primary key,\n  userId text,\n  type text,\n  asset text,\n  amount numeric,\n  counterparty text,\n  timestamp bigint,\n  status text,\n  metadata jsonb\n);\n\ncreate table if not exists public.support (\n  id text primary key,\n  userId text,\n  message text,\n  isAdmin boolean,\n  senderType text,\n  timestamp bigint\n);\n\n-- SAFE: enable RLS and create policy only if missing\nDO $$\nBEGIN\n  IF NOT (SELECT relrowsecurity FROM pg_class c JOIN pg_namespace n ON c.relnamespace=n.oid WHERE n.nspname='public' AND c.relname='users') THEN\n    EXECUTE 'ALTER TABLE public.users ENABLE ROW LEVEL SECURITY';\n  END IF;\n  IF NOT EXISTS (SELECT 1 FROM pg_policy p JOIN pg_class c ON p.polrelid = c.oid JOIN pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname='public' AND c.relname='users' AND p.polname='anon_users_rw') THEN\n    EXECUTE 'CREATE POLICY anon_users_rw ON public.users FOR ALL USING (true) WITH CHECK (true)';\n  END IF;\nEND\n$$;\n\nDO $$\nBEGIN\n  IF NOT (SELECT relrowsecurity FROM pg_class c JOIN pg_namespace n ON c.relnamespace=n.oid WHERE n.nspname='public' AND c.relname='wallets') THEN\n    EXECUTE 'ALTER TABLE public.wallets ENABLE ROW LEVEL SECURITY';\n  END IF;\n  IF NOT EXISTS (SELECT 1 FROM pg_policy p JOIN pg_class c ON p.polrelid = c.oid JOIN pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname='public' AND c.relname='wallets' AND p.polname='anon_wallets_rw') THEN\n    EXECUTE 'CREATE POLICY anon_wallets_rw ON public.wallets FOR ALL USING (true) WITH CHECK (true)';\n  END IF;\nEND\n$$;\n\nDO $$\nBEGIN\n  IF NOT (SELECT relrowsecurity FROM pg_class c JOIN pg_namespace n ON c.relnamespace=n.oid WHERE n.nspname='public' AND c.relname='transactions') THEN\n    EXECUTE 'ALTER TABLE public.transactions ENABLE ROW LEVEL SECURITY';\n  END IF;\n  IF NOT EXISTS (SELECT 1 FROM pg_policy p JOIN pg_class c ON p.polrelid = c.oid JOIN pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname='public' AND c.relname='transactions' AND p.polname='anon_transactions_rw') THEN\n    EXECUTE 'CREATE POLICY anon_transactions_rw ON public.transactions FOR ALL USING (true) WITH CHECK (true)';\n  END IF;\nEND\n$$;\n\nDO $$\nBEGIN\n  IF NOT (SELECT relrowsecurity FROM pg_class c JOIN pg_namespace n ON c.relnamespace=n.oid WHERE n.nspname='public' AND c.relname='support') THEN\n    EXECUTE 'ALTER TABLE public.support ENABLE ROW LEVEL SECURITY';\n  END IF;\n  IF NOT EXISTS (SELECT 1 FROM pg_policy p JOIN pg_class c ON p.polrelid = c.oid JOIN pg_namespace n ON c.relnamespace = n.oid WHERE n.nspname='public' AND c.relname='support' AND p.polname='anon_support_rw') THEN\n    EXECUTE 'CREATE POLICY anon_support_rw ON public.support FOR ALL USING (true) WITH CHECK (true)';\n  END IF;\nEND\n$$;`;
+
+            showModal('Create Dev Tables', `
+                <div class="space-y-3">
+                    <div class="text-sm text-gray-700">This displays SQL you can run in the Supabase SQL editor to create the minimal tables and permissive dev policies. <strong>Only run in development.</strong></div>
+                    <pre id="devSqlPre" class="bg-gray-50 p-3 rounded text-xs overflow-auto" style="max-height:300px">${sql}</pre>
+                    <div class="flex space-x-2">
+                        <button onclick="copyDevSql()" class="px-3 py-2 bg-white border rounded">Copy SQL</button>
+                        <button onclick="openSupabaseConsole()" class="px-3 py-2 bg-black text-white rounded">Open Supabase Console</button>
+                        <button onclick="hideModal()" class="px-3 py-2 bg-gray-100 rounded">Close</button>
+                    </div>
+                </div>
+            `);
+        }
+
+        function copyDevSql(){
+            try{
+                const pre = document.getElementById('devSqlPre');
+                const text = pre ? pre.textContent : '';
+                navigator.clipboard.writeText(text).then(()=>{ alert('SQL copied to clipboard. Paste into Supabase SQL editor.'); }).catch(e=>{ prompt('Copy the SQL below:', text); });
+            }catch(e){ prompt('Copy the SQL below:', document.getElementById('devSqlPre')?.textContent || ''); }
+        }
+
+        function openSupabaseConsole(){
+            const cfg = loadSupabaseConfig() || {};
+            // We can't reliably open the project SQL editor from the project URL without project-ref; open Supabase projects page and instruct user.
+            window.open('https://app.supabase.com/projects', '_blank');
+            alert('Opens Supabase projects page. Open your project and paste the SQL into the SQL editor.');
+        }
+
+        // -- Selection + Push helpers for admin UI --
+        function toggleSelectAll(){
+            const boxes = Array.from(document.querySelectorAll('.record-checkbox'));
+            if(boxes.length===0) return;
+            const anyUnchecked = boxes.some(b=>!b.checked);
+            boxes.forEach(b=>b.checked = anyUnchecked);
+        }
+
+        async function loadSelectableRecords(){
+            try{
+                const type = document.getElementById('recordTypeSelect')?.value || 'users';
+                let items = [];
+                if(!window.nobleChain) return alert('App not initialized');
+                if(type==='users') items = window.nobleChain.getAllUsers() || [];
+                if(type==='transactions') items = window.nobleChain.getAllTransactions() || [];
+                if(type==='support') items = window.nobleChain.getSupportChats() || [];
+                renderSelectableList(type, items);
+            }catch(err){ console.error('loadSelectableRecords', err); alert('Failed to load records: '+(err.message||err)); }
+        }
+
+        function renderSelectableList(type, items){
+            const container = document.getElementById('selectableList');
+            container.innerHTML = '';
+            (items||[]).forEach(item => {
+                const id = item.id || item.userId || item.id;
+                const label = type==='users' ? (item.username || item.email || id) : (type==='transactions' ? `${item.type||''} ${item.amount||''} ${item.asset||''} (${item.id||id})` : (item.message? item.message.substring(0,120) : id));
+                const row = document.createElement('div');
+                row.className = 'flex items-center justify-between py-2 border-b';
+                row.innerHTML = `<label class="flex items-center space-x-3"><input type="checkbox" class="record-checkbox" data-id="${id}"/><span class="text-sm">${label}</span></label><div class="text-xs text-gray-500 ml-3">${id}</div>`;
+                container.appendChild(row);
+            });
+            document.getElementById('pushSelectedBtn').disabled = (items||[]).length===0;
+        }
+
+        async function pushSelectedRecords(){
+            try{
+                const type = document.getElementById('recordTypeSelect')?.value || 'users';
+                const boxes = Array.from(document.querySelectorAll('.record-checkbox')).filter(b=>b.checked);
+                if(boxes.length===0) return alert('Select at least one record to push');
+                const ids = boxes.map(b=>b.getAttribute('data-id'));
+                const results = [];
+                document.getElementById('pushResults').innerHTML = '<div class="text-sm text-gray-600">Pushing...</div>';
+                for(const id of ids){
+                    try{
+                        let item = null;
+                        if(type==='users') item = window.nobleChain.users.find(u=>u.id===id);
+                        if(type==='transactions') item = window.nobleChain.transactions.find(t=>t.id===id);
+                        if(type==='support') item = window.nobleChain.supportChats.find(s=>s.id===id);
+                        if(!item){ results.push({ id, error: 'Not found locally' }); continue; }
+                        let res;
+                        if(type==='users') res = await window.nobleChain.saveUserToSupabase(item);
+                        if(type==='transactions') res = await window.nobleChain.saveTransactionToSupabase(item);
+                        if(type==='support') res = await window.nobleChain.saveSupportToSupabase(item);
+                        results.push({ id, data: res });
+                    }catch(err){ results.push({ id, error: err.message || String(err) }); }
+                }
+                // render results
+                const out = document.getElementById('pushResults'); out.innerHTML = '';
+                results.forEach(r=>{
+                    const el = document.createElement('div'); el.className = 'p-2 border rounded mb-2 bg-gray-50';
+                    let statusHtml = '';
+                    if(r.error){
+                        // r.error may be a string or an object from Supabase
+                        if(typeof r.error === 'string'){
+                            statusHtml = `<div class="text-xs text-red-600">ERROR: ${r.error}</div>`;
+                        } else if(r.error && (r.error.code || r.error.message)){
+                            statusHtml = `<div class="text-xs text-red-600">ERROR: ${r.error.code || ''} ${r.error.message || ''}</div>`;
+                        } else {
+                            statusHtml = `<div class="text-xs text-red-600">ERROR: ${JSON.stringify(r.error)}</div>`;
+                        }
+                    } else {
+                        statusHtml = `<div class="text-xs text-green-600">OK</div>`;
+                    }
+                    const dataHtml = r.data ? `<pre class="text-xs text-gray-500 p-1">${JSON.stringify(r.data,null,2)}</pre>` : '';
+                    el.innerHTML = `<div class="text-sm font-medium">${r.id}</div>${statusHtml}${dataHtml}`;
+                    out.appendChild(el);
+                });
+            }catch(err){ console.error('pushSelectedRecords', err); alert('Push failed: '+(err.message||err)); }
         }
 
         function showModal(title, content) {
