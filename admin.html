@@ -1004,6 +1004,7 @@
                     <div class="text-xs text-gray-500">Warning: client-side anon keys are exposed. Use for demo only.</div>
                     <div class="flex space-x-3">
                         <button onclick="hideModal()" class="flex-1 bg-gray-100 py-3 rounded-xl">Cancel</button>
+                        <button onclick="testSupabaseConfig()" class="flex-1 bg-white border border-gray-300 py-3 rounded-xl">Test</button>
                         <button onclick="saveSupabaseConfig()" class="flex-1 bg-black text-white py-3 rounded-xl">Connect</button>
                     </div>
                 </div>
@@ -1034,7 +1035,32 @@
                 // Clear any client created during validation to avoid multiple GoTrue instances
                 try{ if(window.nobleChain) { delete window.nobleChain.supabase; delete window.nobleChain.supabaseConfig; } }catch(e){}
                 updateDBStatus(false);
+                // disable auto-sync if enabled
+                try{ const t = document.getElementById('autoSyncToggle'); if(t && t.checked){ t.checked = false; toggleAutoSync(false); } }catch(e){}
                 alert('Failed to validate Supabase credentials: ' + (err.message || JSON.stringify(err)));
+            }
+        }
+
+        async function testSupabaseConfig(){
+            const url = document.getElementById('supabase_url')?.value?.trim();
+            const key = document.getElementById('supabase_key')?.value?.trim();
+            if(!url || !key) return alert('Please enter both URL and ANON key to test');
+            const cfg = { url, key };
+            try{
+                if(window.nobleChain) window.nobleChain.supabaseConfig = cfg;
+                const sb = window.nobleChain?.initSupabaseClient();
+                if(!sb) throw new Error('Supabase library not loaded or client initialization failed');
+                const test = await sb.from('users').select('id').limit(1);
+                if(test && test.error) throw test.error;
+                alert('Validation succeeded — credentials appear valid.');
+                return true;
+            }catch(err){
+                console.error('Test credentials failed', err);
+                try{ if(window.nobleChain) { delete window.nobleChain.supabase; delete window.nobleChain.supabaseConfig; } }catch(e){}
+                alert('Validation failed: ' + (err.message || JSON.stringify(err)));
+                // if auto-sync was turned on, turn it off
+                try{ const t = document.getElementById('autoSyncToggle'); if(t && t.checked){ t.checked = false; toggleAutoSync(false); } }catch(e){}
+                return false;
             }
         }
 

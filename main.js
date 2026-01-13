@@ -214,30 +214,46 @@ class NobleChain {
     }
 
     // Supabase client scaffolding (client-only). Uses session-stored config saved by admin UI.
-    initSupabaseClient(){
+    async initSupabaseClient(){
         try{
             const cfg = this.supabaseConfig || (function(){ try{ return JSON.parse(sessionStorage.getItem('noblechain_supabase')||'null'); }catch(e){return null;} })();
             if(!cfg || !cfg.url || !cfg.key) return null;
-            // UMD exposes `supabase` on window
-            if(!window.supabase) {
-                console.warn('Supabase library not loaded (window.supabase missing)');
-                return null;
-            }
+
             // Reuse existing client when possible to avoid multiple GoTrue instances
             if(this.supabase && this.supabaseConfig && this.supabaseConfig.url === cfg.url && this.supabaseConfig.key === cfg.key){
                 return this.supabase;
             }
+
+            // If UMD build loaded, use window.supabase
+            if(window.supabase && typeof window.supabase.createClient === 'function'){
+                try{
+                    this.supabase = window.supabase.createClient(cfg.url, cfg.key);
+                    this.supabaseConfig = cfg;
+                    return this.supabase;
+                }catch(err){ console.warn('Failed to create supabase client from window.supabase', err); }
+            }
+
+            // Try dynamic ESM import of supabase-js if available (handles +esm CDN usage)
             try{
-                this.supabase = window.supabase.createClient(cfg.url, cfg.key);
-                this.supabaseConfig = cfg;
-                return this.supabase;
-            }catch(err){ console.warn('Failed to create supabase client', err); return null; }
+                const mod = await import('https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm');
+                if(mod && typeof mod.createClient === 'function'){
+                    this.supabase = mod.createClient(cfg.url, cfg.key);
+                    this.supabaseConfig = cfg;
+                    return this.supabase;
+                }
+            }catch(err){
+                // ignore dynamic import errors but log for debugging
+                console.warn('Dynamic ESM import of supabase-js failed', err);
+            }
+
+            console.warn('Supabase library not loaded (no UMD window.supabase and dynamic import failed)');
+            return null;
         }catch(e){ console.warn('initSupabaseClient error', e); return null; }
     }
 
     // Pull remote data (users, wallets, transactions, support) and merge into local store
     async fetchRemoteData(){
-        const sb = this.initSupabaseClient();
+        const sb = await this.initSupabaseClient();
         if(!sb) throw new Error('Supabase not configured. Use Admin Console Connect.');
         const summary = { users:0, wallets:0, transactions:0, support:0 };
         try{
@@ -284,7 +300,7 @@ class NobleChain {
 
     // Push local arrays to remote (upsert). Be cautious: this is client-side and uses anon keys.
     async pushLocalData(){
-        const sb = this.initSupabaseClient();
+        const sb = await this.initSupabaseClient();
         if(!sb) throw new Error('Supabase not configured. Use Admin Console Connect.');
         const results = { users:null, wallets:null, transactions:null, support:null };
         try{
@@ -316,10 +332,10 @@ class NobleChain {
     }
 
     // Subscribe to Supabase realtime changes for core tables and merge them locally.
-    subscribeToChanges(tables = ['users','wallets','transactions','support']){
+    async subscribeToChanges(tables = ['users','wallets','transactions','support']){
         try{
             if(this._supabaseSubscriptions && this._supabaseSubscriptions.length>0){ console.warn('Already subscribed to realtime changes'); return this._supabaseSubscriptions; }
-            const sb = this.initSupabaseClient();
+            const sb = await this.initSupabaseClient();
             if(!sb) throw new Error('Supabase not configured. Use Admin Console Connect.');
 
             this._supabaseSubscriptions = [];
